@@ -116,6 +116,8 @@ void * GLFWBackend::createWindow( const WindowCreateParameters &params )
 	glfwSetWindowCloseCallback( _wnd, windowCloseListener );
 	glfwSetWindowSizeCallback( _wnd, windowResizeListener );
 	glfwSetKeyCallback( _wnd, keyPressListener );
+	glfwSetMouseButtonCallback( _wnd, mousePressListener );
+	glfwSetScrollCallback( _wnd, mouseScrollListener );
 	glfwSetCursorPosCallback( _wnd, mouseMoveListener );
 	glfwSetCursorEnterCallback( _wnd, mouseEnterListener );
 //	glfwSetErrorCallback();
@@ -193,6 +195,20 @@ void GLFWBackend::keyPressListener( GLFWwindow* win, int key, int scancode, int 
 	if ( device->_keyEventHandler.isInitialized() ) device->_keyEventHandler.invoke( key, action, mods );
 }
 
+void GLFWBackend::mousePressListener(GLFWwindow* win, int button, int action, int mods)
+{
+	GLFWBackend *device = static_cast< GLFWBackend* >( glfwGetWindowUserPointer( win ) );
+	if ( device->_keyEventHandler.isInitialized() ) device->_mouseButtonEventHandler.invoke( button, action, mods );
+}
+
+void GLFWBackend::mouseScrollListener(GLFWwindow* win, double xoffset, double yoffset)
+{
+	std::cout << "mouseScrollListener debug" << std::endl;
+	GLFWBackend *device = static_cast< GLFWBackend* >( glfwGetWindowUserPointer( win ) );
+	if ( device->_keyEventHandler.isInitialized() ) device->_mouseWheelEventHandler.invoke( xoffset, yoffset, 0, 0);
+}
+
+
 void GLFWBackend::mouseMoveListener( GLFWwindow* win, double x, double y )
 {
 	GLFWBackend *device = static_cast< GLFWBackend* >( glfwGetWindowUserPointer( win ) );
@@ -212,6 +228,11 @@ void GLFWBackend::mouseEnterListener( GLFWwindow* win, int entered )
 bool GLFWBackend::checkKeyDown( void *handle, int key )
 {
 	return glfwGetKey( ( GLFWwindow * ) handle, key ) == GLFW_PRESS;
+}
+
+bool GLFWBackend::checkMouseButtonDown(void *handle, int key)
+{
+	return glfwGetMouseButton( ( GLFWwindow * ) handle, key ) == GLFW_PRESS;
 }
 
 void GLFWBackend::logMessage( LogMessageLevel messageLevel, const char *msg )

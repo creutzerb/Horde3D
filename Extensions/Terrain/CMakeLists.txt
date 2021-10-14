@@ -10,7 +10,7 @@ if(HORDE3D_BUILD_TERRAIN)
 	set( HORDE3D_EXTENSION_INCLUDES "${HORDE3D_EXTENSION_INCLUDES}#include \"Extensions/Terrain/Source/extension.h\"\n" PARENT_SCOPE )
 	set( HORDE3D_EXTENSION_LIBS ${HORDE3D_EXTENSION_LIBS} Horde3DTerrain PARENT_SCOPE )
 
-	add_subdirectory(Sample)
+	#add_subdirectory(Sample)
 
 	if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fpic")

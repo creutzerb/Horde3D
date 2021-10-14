@@ -154,6 +154,19 @@
 #define KEY_LAST               KEY_MENU
 
 // Mouse buttons
+#define GLFW_MOUSE_BUTTON_1         0
+#define GLFW_MOUSE_BUTTON_2         1
+#define GLFW_MOUSE_BUTTON_3         2
+#define GLFW_MOUSE_BUTTON_4         3
+#define GLFW_MOUSE_BUTTON_5         4
+#define GLFW_MOUSE_BUTTON_6         5
+#define GLFW_MOUSE_BUTTON_7         6
+#define GLFW_MOUSE_BUTTON_8         7
+#define GLFW_MOUSE_BUTTON_LAST      GLFW_MOUSE_BUTTON_8
+#define GLFW_MOUSE_BUTTON_LEFT      GLFW_MOUSE_BUTTON_1
+#define GLFW_MOUSE_BUTTON_RIGHT     GLFW_MOUSE_BUTTON_2
+#define GLFW_MOUSE_BUTTON_MIDDLE    GLFW_MOUSE_BUTTON_3
+
 #define MOUSE_RELEASE			0
 
 #define MOUSE_PRESS				1
@@ -326,6 +339,8 @@ public:
 	virtual void setCursorVisible( void *handle, bool visible ) = 0;
 
 	virtual bool checkKeyDown( void *handle, int key ) = 0;
+
+	virtual bool checkMouseButtonDown( void *handle, int key ) = 0;
 
 	virtual void logMessage( LogMessageLevel messageLevel, const char *msg ) = 0;
 

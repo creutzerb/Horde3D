@@ -17,7 +17,7 @@
 #ifndef _sample_app_H_
 #define _sample_app_H_
 
-#include "Horde3D.h"
+#include "horde3d/Horde3D.h"
 #include <string>
 #include <chrono>
 

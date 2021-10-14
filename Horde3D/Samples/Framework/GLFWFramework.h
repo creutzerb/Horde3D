@@ -28,6 +28,8 @@ public:
 
 	virtual bool checkKeyDown( void *handle, int key ) override;
 
+	virtual bool checkMouseButtonDown( void *handle, int key ) override;
+
 	virtual void logMessage( LogMessageLevel messageLevel, const char *msg ) override;
 
 	virtual bool loadResources( const char *contentDir ) override;
@@ -38,6 +40,8 @@ protected:
 	static void windowCloseListener( GLFWwindow* win );
 	static void windowResizeListener( GLFWwindow* win, int width, int height );
 	static void keyPressListener( GLFWwindow* win, int key, int scancode, int action, int mods );
+	static void mousePressListener(GLFWwindow* win, int button, int action, int mods);
+	static void mouseScrollListener(GLFWwindow* win, double xoffset, double yoffset);
 	static void mouseMoveListener( GLFWwindow* win, double x, double y );
 	static void mouseEnterListener( GLFWwindow* win, int entered );
 
