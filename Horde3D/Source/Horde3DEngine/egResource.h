@@ -183,7 +183,7 @@ public:
 
 	std::vector < Resource * > &getResources() { return _resources; }
 
-protected:
+//protected:
 	ResHandle addResource( Resource &res );
 
 protected:

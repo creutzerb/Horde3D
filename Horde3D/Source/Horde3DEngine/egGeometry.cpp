@@ -97,6 +97,257 @@ Resource *GeometryResource::clone()
 	return res;
 }
 
+GeometryResource *GeometryResource::initModularGeo()
+{
+	GeometryResource *res = new GeometryResource( "|tmpZob|", _flags );
+
+//	*res = *this;
+	// RES members
+//	res->_name = "";
+	res->_type = _type;
+	res->_userRefCount = 1;
+	res->_refCount = 0;
+
+	res->_loaded = true;
+	res->_noQuery = _noQuery;
+
+	// GEO RES members
+	res->_minMorphIndex = _minMorphIndex;
+	res->_maxMorphIndex = _maxMorphIndex;
+	res->_skelAABB = _skelAABB;
+	res->_16BitIndices = _16BitIndices;
+
+	copy(_joints.begin(), _joints.end(), back_inserter(res->_joints));
+	copy(_morphTargets.begin(), _morphTargets.end(), back_inserter(res->_morphTargets));
+
+	res->_indexCount = _indexCount;
+	res->_vertCount = _vertCount;
+
+	// TODO: Check if elemcpy_le should be used
+	// Make a deep copy of the data
+	res->_indexData = new char[_indexCount * (_16BitIndices ? 2 : 4)];
+	res->_vertPosData = new Vec3f[_vertCount];
+	res->_vertTanData = new VertexDataTan[_vertCount];
+	res->_vertStaticData = new VertexDataStatic[_vertCount];
+	memcpy( res->_indexData, _indexData, _indexCount * (_16BitIndices ? 2 : 4) );
+	memcpy( res->_vertPosData, _vertPosData, _vertCount * sizeof( Vec3f ) );
+	memcpy( res->_vertTanData, _vertTanData, _vertCount * sizeof( VertexDataTan ) );
+	memcpy( res->_vertStaticData, _vertStaticData, _vertCount * sizeof( VertexDataStatic ) );
+
+	return res;
+}
+
+void GeometryResource::appendModularGeo(GeometryResource* other_res, float* seamx, float* seamy, float* seamz, uint seamCount, bool x_sym)
+{
+
+	// this geo data before append
+	char* tmpIndex = _indexData;
+	Vec3f* tmpVertPos = _vertPosData;
+	VertexDataTan* tmpTan = _vertTanData;
+	VertexDataStatic* tmpStatic = _vertStaticData;
+	unsigned int tmpIndCount = _indexCount;
+	unsigned int tmpVertCount = _vertCount;
+
+	// updated counts + prepare arrays
+	_indexCount = tmpIndCount + other_res->_indexCount;
+	_vertCount = tmpVertCount + other_res->_vertCount;
+
+	_indexData = new char[_indexCount * (_16BitIndices ? 2 : 4)];
+	_vertPosData = new Vec3f[_vertCount];
+	_vertTanData = new VertexDataTan[_vertCount];
+	_vertStaticData = new VertexDataStatic[_vertCount];
+
+
+	ulong tmpIndSize = tmpIndCount * (_16BitIndices ? 2 : 4);
+	memcpy(_indexData, tmpIndex, tmpIndSize);
+
+	ulong tmpVertPosSize = tmpVertCount * sizeof( Vec3f );
+	memcpy(_vertPosData, tmpVertPos, tmpVertPosSize);
+
+	ulong tmpTanSize = tmpVertCount * sizeof( VertexDataTan );
+	memcpy(_vertTanData, tmpTan, tmpTanSize);
+
+	ulong tmpStaticSize = tmpVertCount * sizeof( VertexDataStatic );
+	memcpy(_vertStaticData, tmpStatic, tmpStaticSize);
+
+
+	for (uint i = 0; i < other_res->_indexCount; i++){
+		((uint16*)_indexData)[i+tmpIndCount] = ((uint16*)other_res->_indexData)[i];
+	}
+
+	// offset indices
+	if( _16BitIndices )
+	{
+		for (uint i = tmpIndCount; i < _indexCount; i++){
+			uint16 t = ((uint16*)_indexData)[i] + tmpVertCount;
+			memcpy( _indexData + i*2 , &t, sizeof (uint16));
+		}
+	}
+//	else
+//	{
+
+//	}
+
+	const float thresh = 0.0001f;
+	const uint cap = 2147483647;
+
+	int offset  = 0;
+
+	for (uint i = 0; i < other_res->_vertCount; i++){
+
+		bool in_sym = false;// symetric of same vertex was found
+
+		// search for overlapping vert between 2 meshes
+		// we have a list of overlapping positions : the seam
+		uint seamInd = cap;
+		for (uint j = 0; j < seamCount; j++){
+			if (fabsf(other_res->_vertPosData[i].x - seamx[j]) < thresh  &&
+					fabsf(other_res->_vertPosData[i].y - seamy[j]) < thresh &&
+					fabsf(other_res->_vertPosData[i].z - seamz[j]) < thresh){
+				seamInd = j;
+				break;
+			}
+
+			if (x_sym){
+				if (fabsf(other_res->_vertPosData[i].x + seamx[j]) < thresh  &&
+						fabsf(other_res->_vertPosData[i].y - seamy[j]) < thresh &&
+						fabsf(other_res->_vertPosData[i].z - seamz[j]) < thresh){
+					seamInd = j;
+					in_sym = true;
+					break;
+				}
+			}
+		}
+
+		if (seamInd == cap){
+			// this is a new unique vert
+			_vertPosData[i + tmpVertCount - offset] = other_res->_vertPosData[i];
+			_vertTanData[i + tmpVertCount - offset] = other_res->_vertTanData[i];
+			_vertStaticData[i + tmpVertCount - offset] = other_res->_vertStaticData[i];
+			for (uint k = tmpIndCount; k < _indexCount; k++){
+				// some index in the list disappered
+				if (((uint16*)_indexData)[k] == i + tmpVertCount){
+					((uint16*)_indexData)[k] -= offset;
+				}
+			}
+		}else{
+			// this vert already exists
+			// find index in base part
+			offset++;
+			uint baseInd = cap;
+
+			if (in_sym){
+				for (uint j = 0; j < tmpVertCount; j++){
+					if (fabsf(_vertPosData[j].x + seamx[seamInd]) < thresh  &&
+							fabsf(_vertPosData[j].y - seamy[seamInd]) < thresh &&
+							fabsf(_vertPosData[j].z - seamz[seamInd]) < thresh){
+						baseInd = j;
+						break;
+					}
+				}
+			}else{
+				for (uint j = 0; j < tmpVertCount; j++){
+					if (fabsf(_vertPosData[j].x - seamx[seamInd]) < thresh  &&
+							fabsf(_vertPosData[j].y - seamy[seamInd]) < thresh &&
+							fabsf(_vertPosData[j].z - seamz[seamInd]) < thresh){
+						baseInd = j;
+						break;
+					}
+				}
+			}
+
+			if (baseInd == cap){
+				Modules::log().writeDebugInfo( "didn't find vertex in base geo");
+			}
+
+			// update index list
+			for (uint k = tmpIndCount; k < _indexCount; k++){
+				// any indice pointing to this vertex should point to its clone from the base geo
+				if (((uint16*)_indexData)[k] == i + tmpVertCount){
+					((uint16*)_indexData)[k] = baseInd;
+				}
+			}
+		}
+	}
+
+//	Modules::log().writeDebugInfo( "ind count %d", _indexCount);
+//	Modules::log().writeDebugInfo( "vert count %d", _vertCount);
+//	Modules::log().writeDebugInfo( "joint count %d", _joints.size());
+//	Modules::log().writeDebugInfo( "joint count %d", other_res->_joints.size());
+
+	/*
+	Modules::log().writeDebugInfo( "Searching seam verts ------------------------");
+
+	for (uint i = 0; i < seamCount; i++){
+//		Modules::log().writeDebugInfo( "seam x= %f", seamx[i]);
+
+		// find one vertex in old geo and one vertex in new geo with those coords
+		uint prev_ind = cap;
+		uint appe_ind = cap;
+
+		for (uint j = 0; j < tmpVertCount; j++){
+			if (fabsf(_vertPosData[j].x - seamx[i]) < thresh  &&
+					fabsf(_vertPosData[j].y - seamy[i]) < thresh &&
+					fabsf(_vertPosData[j].z - seamz[i]) < thresh){
+				prev_ind = j;
+				break;
+			}
+		}
+
+		for (uint j = tmpVertCount; j < _vertCount; j++){
+			if (fabsf(_vertPosData[j].x - seamx[i]) < thresh  &&
+					fabsf(_vertPosData[j].y - seamy[i]) < thresh &&
+					fabsf(_vertPosData[j].z - seamz[i]) < thresh){
+				appe_ind = j;
+				break;
+			}
+		}
+
+//		if (prev_ind != cap)
+//			Modules::log().writeDebugInfo( "prev found %d   %f = %f", i , _vertPosData[prev_ind].x, seamx[i]);
+//		if(appe_ind != cap)
+//			Modules::log().writeDebugInfo( "append found %d", i);
+
+		if (prev_ind != cap && appe_ind != cap){
+			// fix normal
+//			Modules::log().writeDebugInfo( "prev normal  %f  %f  %f",
+//				_vertTanData[prev_ind].normal.x , _vertTanData[prev_ind].normal.y, _vertTanData[prev_ind].normal.z);
+//			Modules::log().writeDebugInfo( "appe normal  %f  %f  %f",
+//				_vertTanData[appe_ind].normal.x , _vertTanData[appe_ind].normal.y, _vertTanData[appe_ind].normal.z);
+
+			_vertTanData[appe_ind] =_vertTanData[prev_ind];
+		}
+	}
+	*/
+
+	delete tmpIndex;
+	delete tmpVertPos;
+	delete tmpTan;
+	delete tmpStatic;
+}
+
+void GeometryResource::completeModularGeo()
+{
+	RenderDeviceInterface *rdi = Modules::renderer().getRenderDevice();
+
+	_geoObj = rdi->beginCreatingGeometry( Modules::renderer().getDefaultVertexLayout( DefaultVertexLayouts::Model ) );
+
+	_indexBuf = rdi->createIndexBuffer( _indexCount * (_16BitIndices ? 2 : 4), _indexData );
+	_posVBuf = rdi->createVertexBuffer( _vertCount * sizeof( Vec3f ), _vertPosData );
+	_tanVBuf = rdi->createVertexBuffer( _vertCount * sizeof( VertexDataTan ), _vertTanData );
+	_staticVBuf = rdi->createVertexBuffer( _vertCount * sizeof( VertexDataStatic ), _vertStaticData );
+
+	rdi->setGeomVertexParams( _geoObj, _posVBuf, 0, 0, sizeof( Vec3f ) );
+	rdi->setGeomVertexParams( _geoObj, _tanVBuf, 1, 0, sizeof( VertexDataTan ) );
+	rdi->setGeomVertexParams( _geoObj, _tanVBuf, 2, sizeof( Vec3f ), sizeof( VertexDataTan ) );
+	rdi->setGeomVertexParams( _geoObj, _staticVBuf, 3, 0, sizeof( VertexDataStatic ) );
+	rdi->setGeomIndexParams( _geoObj, _indexBuf, _16BitIndices ? IDXFMT_16 : IDXFMT_32 );
+
+	rdi->finishCreatingGeometry( _geoObj );
+
+//	Modules::log().writeDebugInfo( "completeModularGeo");
+}
+
 
 void GeometryResource::initDefault()
 {

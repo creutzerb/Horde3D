@@ -91,6 +91,10 @@ public:
 	GeometryResource( const std::string &name, int flags );
 	~GeometryResource();
 	Resource *clone();
+
+	GeometryResource *initModularGeo();
+	void appendModularGeo(GeometryResource *other_res, float *seamx, float *seamy, float *seamz, uint seamCount, bool x_sym);
+	void completeModularGeo();
 	
 	void initDefault();
 	void release();

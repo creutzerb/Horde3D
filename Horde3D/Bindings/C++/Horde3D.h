@@ -2077,6 +2077,48 @@ H3D_API H3DNode h3dAddGroupNode( H3DNode parent, const char *name );
 */
 H3D_API H3DNode h3dAddModelNode( H3DNode parent, const char *name, H3DRes geometryRes );
 
+/* Function: h3dInitModularGeo
+		first step to create modular geo
+
+	Details:
+		clone a geo res into a new res - you will add up to it other geores
+
+	Parameters:
+		geometryRes	- first modular geo part - you clone from it
+
+	Returns:
+		uncomplete modular geo resource handle
+*/
+H3D_API H3DRes h3dInitModularGeo( H3DRes geometryRes );
+
+/* Function: h3dAppendModularGeo
+		first step to create modular geo
+
+	Details:
+		clone a geo res into a new res - you will add up to it other geores
+
+	Parameters:
+		geometryRes	- first modular geo part - you clone from it
+
+	Returns:
+		uncomplete modular geo resource handle
+*/
+H3D_API void h3dAppendModularGeo( H3DRes modGeo, H3DRes otherGeo, float* seamx, float* seamy, float* seamz, unsigned int seamCount, bool x_sym);
+
+/* Function: h3dCompleteModularGeo
+		first step to create modular geo
+
+	Details:
+		clone a geo res into a new res - you will add up to it other geores
+
+	Parameters:
+		geometryRes	- first modular geo part - you clone from it
+
+	Returns:
+		uncomplete modular geo resource handle
+*/
+H3D_API void h3dCompleteModularGeo( H3DRes geometryRes );
+
 /* Function: h3dSetupModelAnimStage
 		Configures an animation stage of a Model node.
 	

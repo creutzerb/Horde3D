@@ -787,6 +787,35 @@ H3D_IMPL NodeHandle h3dAddModelNode( NodeHandle parent, const char *name, ResHan
 	return Modules::sceneMan().addNode( sn, *parentNode );
 }
 
+H3D_IMPL ResHandle h3dInitModularGeo( ResHandle geometryRes )
+{
+	Resource *geoRes = Modules::resMan().resolveResHandle( geometryRes );
+	APIFUNC_VALIDATE_RES_TYPE( geoRes, ResourceTypes::Geometry, "h3dInitModularGeo", 0 );
+	GeometryResource* geo = (GeometryResource *)geoRes;
+	GeometryResource* res = geo->initModularGeo();
+	return Modules::resMan().addResource(*res);
+}
+
+H3D_IMPL void h3dAppendModularGeo( ResHandle modGeo, ResHandle otherGeo, float* seamx, float* seamy, float* seamz, uint seamCount, bool x_sym)
+{
+	Resource *modGeoRes = Modules::resMan().resolveResHandle( modGeo );
+	APIFUNC_VALIDATE_RES_TYPE( modGeoRes, ResourceTypes::Geometry, "h3dAppendModularGeo", APIFUNC_RET_VOID );
+
+	Resource *othergeoRes = Modules::resMan().resolveResHandle( otherGeo );
+	APIFUNC_VALIDATE_RES_TYPE( othergeoRes, ResourceTypes::Geometry, "h3dAppendModularGeo", APIFUNC_RET_VOID );
+
+	GeometryResource* geo = (GeometryResource *)modGeoRes;
+	geo->appendModularGeo((GeometryResource *)othergeoRes, seamx, seamy, seamz, seamCount, x_sym);
+}
+
+H3D_IMPL void h3dCompleteModularGeo( ResHandle geometryRes )
+{
+	Resource *geoRes = Modules::resMan().resolveResHandle( geometryRes );
+	APIFUNC_VALIDATE_RES_TYPE( geoRes, ResourceTypes::Geometry, "h3dCompleteModularGeo", APIFUNC_RET_VOID );
+	GeometryResource* geo = (GeometryResource *)geoRes;
+	geo->completeModularGeo();
+}
+
 
 H3D_IMPL void h3dSetupModelAnimStage( NodeHandle modelNode, int stage, ResHandle animationRes, int layer,
                                       const char *startNode, bool additive )
