@@ -32,9 +32,6 @@ struct ShaderContext;
 const uint32 ParticlesPerBatch = 64;	// Warning: The GPU must have enough registers
 const uint32 QuadIndexBufCount = ParticlesPerBatch * 6;
 
-#define OCCPROXYLIST_RENDERABLES 0
-#define OCCPROXYLIST_LIGHTS 1
-
 extern const char *vsOccBox;
 extern const char *fsOccBox;
 	
@@ -45,7 +42,7 @@ extern const char *fsOccBox;
 
 typedef void (*RenderFunc)( uint32 firstItem, uint32 lastItem, const std::string &shaderContext,
                             int theClass, bool debugView, const Frustum *frust1,
-                            const Frustum *frust2, RenderingOrder::List order, int occSet );
+							const Frustum *frust2, RenderingOrder::List order);
 
 struct RenderFuncListItem
 {
@@ -79,18 +76,6 @@ struct ParticleVert
 };
 
 // =================================================================================================
-
-struct OccProxy
-{
-	Vec3f   bbMin, bbMax;
-	uint32  queryObj;
-
-	OccProxy() {}
-	OccProxy( const Vec3f &bbMin, const Vec3f &bbMax, uint32 queryObj ) :
-		bbMin( bbMin ), bbMax( bbMax ), queryObj( queryObj )
-	{
-	}
-};
 
 struct PipeSamplerBinding
 {
@@ -135,7 +120,8 @@ struct DefaultVertexLayouts
 	{
 		Position = 0,
 		Particle,
-		Model
+		Model,
+		ModelVertColor
 	};
 };
 
@@ -179,13 +165,6 @@ public:
 	
 	bool createShadowRB( uint32 width, uint32 height );
 	void releaseShadowRB();
-
-	// Occlusion culling
-	int registerOccSet();
-	void unregisterOccSet( int occSet );
-	void drawOccProxies( uint32 list );
-	void pushOccProxy( uint32 list, const Vec3f &bbMin, const Vec3f &bbMax, uint32 queryObj )
-		{ _occProxies[list].push_back( OccProxy( bbMin, bbMax, queryObj ) ); }
 	
 	// Drawing
 	void drawAABB( const Vec3f &bbMin, const Vec3f &bbMax );
@@ -193,11 +172,11 @@ public:
 	void drawCone( float height, float fov, const Matrix4f &transMat );
 
 	static void drawMeshes( uint32 firstItem, uint32 lastItem, const std::string &shaderContext, int theClass,
-		bool debugView, const Frustum *frust1, const Frustum *frust2, RenderingOrder::List order, int occSet );
+		bool debugView, const Frustum *frust1, const Frustum *frust2, RenderingOrder::List order );
 	static void drawParticles( uint32 firstItem, uint32 lastItem, const std::string &shaderContext, int theClass,
-		bool debugView, const Frustum *frust1, const Frustum *frust2, RenderingOrder::List order, int occSet );
+		bool debugView, const Frustum *frust1, const Frustum *frust2, RenderingOrder::List order );
 	static void drawComputeResults( uint32 firstItem, uint32 lastItem, const std::string &shaderContext, int theClass, 
-									bool debugView, const Frustum *frust1, const Frustum *frust2, RenderingOrder::List order, int occSet );
+									bool debugView, const Frustum *frust1, const Frustum *frust2, RenderingOrder::List order );
 
 	void render( CameraNode *camNode );
 	void finalizeFrame();
@@ -239,14 +218,13 @@ protected:
 	void bindPipeBuffer( uint32 rbObj, const std::string &sampler, uint32 bufIndex );
 	void clear( bool depth, bool buf0, bool buf1, bool buf2, bool buf3, float r, float g, float b, float a );
 	void drawFSQuad( Resource *matRes, const std::string &shaderContext );
-	void drawGeometry( const std::string &shaderContext, int theClass,
-	                   RenderingOrder::List order, int occSet );
+	void drawGeometry(const std::string &shaderContext, int theClass,
+					   RenderingOrder::List order);
 	void drawLightGeometry( const std::string &shaderContext, int theClass,
-	                        bool noShadows, RenderingOrder::List order, int occSet );
-	void drawLightShapes( const std::string &shaderContext, bool noShadows, int occSet );
+							bool noShadows, RenderingOrder::List order );
 	
 	void drawRenderables( const std::string &shaderContext, int theClass, bool debugView,
-		const Frustum *frust1, const Frustum *frust2, RenderingOrder::List order, int occSet );
+		const Frustum *frust1, const Frustum *frust2, RenderingOrder::List order );
 	
 	void renderDebugView();
 	void finishRendering();
@@ -263,8 +241,6 @@ protected:
 	std::vector< RenderFuncListItem >  _renderFuncRegistry;
 	
 	std::vector< PipeSamplerBinding >  _pipeSamplerBindings;
-	std::vector< char >                _occSets;  // Actually bool
-	std::vector< OccProxy >            _occProxies[2];  // 0: renderables, 1: lights
 
 	std::vector< EngineUniform >	   _engineUniforms; // uniforms, that are used internally by the engine and extensions
 	std::vector< ShadowParameters >	   _shadowParams; // shadow lightmaps and project matrices
@@ -301,6 +277,7 @@ protected:
 	Matrix4f                           _lightMats[4];
 
 	uint32                             _vlPosOnly, _vlModel, _vlParticle;
+	uint32							   _vlModelVertColor;
 	ShaderCombination                  _defColorShader;
 	int                                _defColShader_color;  // Uniform location
 	

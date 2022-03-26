@@ -27,8 +27,6 @@ using namespace std;
 
 ModelNode::ModelNode( const ModelNodeTpl &modelTpl ) :
 	SceneNode( modelTpl ), _geometryRes( modelTpl.geoRes ), _baseGeoRes( 0x0 ),
-	_lodDist1( modelTpl.lodDist1 ), _lodDist2( modelTpl.lodDist2 ),
-	_lodDist3( modelTpl.lodDist3 ), _lodDist4( modelTpl.lodDist4 ),
 	_softwareSkinning( modelTpl.softwareSkinning ), _skinningDirty( false ),
 	_nodeListDirty( false ), _morpherUsed( false ), _morpherDirty( false )
 {
@@ -66,15 +64,6 @@ SceneNodeTpl *ModelNode::parsingFunc( map< string, string > &attribs )
 		else
 			modelTpl->softwareSkinning = false;
 	}
-
-	itr = attribs.find( "lodDist1" );
-	if( itr != attribs.end() ) modelTpl->lodDist1 = toFloat( itr->second.c_str() );
-	itr = attribs.find( "lodDist2" );
-	if( itr != attribs.end() ) modelTpl->lodDist2 = toFloat( itr->second.c_str() );
-	itr = attribs.find( "lodDist3" );
-	if( itr != attribs.end() ) modelTpl->lodDist3 = toFloat( itr->second.c_str() );
-	itr = attribs.find( "lodDist4" );
-	if( itr != attribs.end() ) modelTpl->lodDist4 = toFloat( itr->second.c_str() );
 
 	if( !result )
 	{
@@ -306,40 +295,12 @@ void ModelNode::setParamI( int param, int value )
 
 float ModelNode::getParamF( int param, int compIdx ) const
 {
-	switch( param )
-	{
-	case ModelNodeParams::LodDist1F:
-		return _lodDist1;
-	case ModelNodeParams::LodDist2F:
-		return _lodDist2;
-	case ModelNodeParams::LodDist3F:
-		return _lodDist3;
-	case ModelNodeParams::LodDist4F:
-		return _lodDist4;
-	}
-
 	return SceneNode::getParamF( param, compIdx );
 }
 
 
 void ModelNode::setParamF( int param, int compIdx, float value )
 {
-	switch( param )
-	{
-	case ModelNodeParams::LodDist1F:
-		_lodDist1 = value;
-		return;
-	case ModelNodeParams::LodDist2F:
-		_lodDist2 = value;
-		return;
-	case ModelNodeParams::LodDist3F:
-		_lodDist3 = value;
-		return;
-	case ModelNodeParams::LodDist4F:
-		_lodDist4 = value;
-		return;
-	}
-
 	SceneNode::setParamF( param, compIdx, value );
 }
 
@@ -476,25 +437,24 @@ bool ModelNode::updateGeometry()
 	return true;
 }
 
-
-uint32 ModelNode::calcLodLevel( const Vec3f &viewPoint ) const
-{
-	Vec3f pos( _absTrans.c[3][0], _absTrans.c[3][1], _absTrans.c[3][2] );
-	float dist = (pos - viewPoint).length();
-	uint32 curLod = 4;
-	
-	if( dist < _lodDist1 ) curLod = 0;
-	else if( dist < _lodDist2 ) curLod = 1;
-	else if( dist < _lodDist3 ) curLod = 2;
-	else if( dist < _lodDist4 ) curLod = 3;
-
-	return curLod;
-}
-
-
 void ModelNode::setCustomInstData( const float *data, uint32 count )
 {
 	memcpy( _customInstData, data, std::min( count, ModelCustomVecCount * 4 ) * sizeof( float ) );
+}
+
+
+int ModelNode::get_meshes(int **handles)
+{
+	if( _nodeListDirty ) recreateNodeList();
+
+	const int count = _meshList.size();
+	(*handles) = (int*)malloc(count * sizeof (int));
+
+	for (int i = 0; i < count ; i++) {
+		(*handles)[i] = _meshList[i]->getSgHandle();
+//		printf ("mesh count: %d \n", _meshList[i]->getBatchStart());
+	}
+	return count;
 }
 
 

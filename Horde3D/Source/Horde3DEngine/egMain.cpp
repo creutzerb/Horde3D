@@ -261,6 +261,14 @@ H3D_IMPL ResHandle h3dCloneResource( ResHandle sourceRes, const char *name )
 	return Modules::resMan().cloneResource( *resObj, safeStr( name, 0 ) );
 }
 
+H3D_IMPL ResHandle h3dCloneResAddVertexColor( ResHandle sourceRes, const char *name )
+{
+	Resource *resObj = Modules::resMan().resolveResHandle( sourceRes );
+	APIFUNC_VALIDATE_RES( resObj, "h3dCloneResource", 0 );
+
+        return Modules::resMan().cloneResourceAddVertColor( *resObj, safeStr( name, 0 ) );
+}
+
 
 H3D_IMPL int h3dRemoveResource( ResHandle res )
 {
@@ -512,6 +520,26 @@ H3D_IMPL NodeHandle h3dGetNodeChild( NodeHandle parent, int index )
 		return 0;
 }
 
+H3D_IMPL void* h3dGetModelPointer( NodeHandle node)
+{
+	SceneNode *sn = Modules::sceneMan().resolveNodeHandle( node );
+	return sn;
+}
+
+H3D_IMPL void h3dCustomQueueAdd( int meshIndex){
+	Modules::sceneMan().customQueueAdd(meshIndex);
+}
+
+
+H3D_IMPL void h3dCustomQueueClear(){
+	Modules::sceneMan().customQueueClear();
+}
+
+H3D_IMPL int h3dGetModelMeshes( NodeHandle model, int** meshes_handles)
+{
+	ModelNode *sn = (ModelNode*)Modules::sceneMan().resolveNodeHandle( model );
+	return sn->get_meshes(meshes_handles);
+}
 
 H3D_IMPL NodeHandle h3dAddNodes( NodeHandle parent, ResHandle sceneGraphRes )
 {
@@ -751,14 +779,14 @@ H3D_IMPL bool h3dGetCastRayResult( int index, NodeHandle *node, float *distance,
 }
 
 
-H3D_IMPL int h3dCheckNodeVisibility( NodeHandle node, NodeHandle cameraNode, bool checkOcclusion, bool calcLod )
+H3D_IMPL int h3dCheckNodeVisibility( NodeHandle node, NodeHandle cameraNode )
 {
 	SceneNode *sn = Modules::sceneMan().resolveNodeHandle( node );
 	APIFUNC_VALIDATE_NODE( sn, "h3dCheckNodeVisibility", -1 );
 	SceneNode *cam = Modules::sceneMan().resolveNodeHandle( cameraNode );
 	APIFUNC_VALIDATE_NODE_TYPE( cam, SceneNodeTypes::Camera, "h3dCheckNodeVisibility", -1 );
 	
-	return Modules::sceneMan().checkNodeVisibility( *sn, *(CameraNode *)cam, checkOcclusion, calcLod );
+	return Modules::sceneMan().checkNodeVisibility( *sn, *(CameraNode *)cam );
 }
 
 
@@ -785,35 +813,6 @@ H3D_IMPL NodeHandle h3dAddModelNode( NodeHandle parent, const char *name, ResHan
 	ModelNodeTpl tpl( safeStr( name, 0 ), (GeometryResource *)geoRes );
 	SceneNode *sn = Modules::sceneMan().findType( SceneNodeTypes::Model )->factoryFunc( tpl );
 	return Modules::sceneMan().addNode( sn, *parentNode );
-}
-
-H3D_IMPL ResHandle h3dInitModularGeo( ResHandle geometryRes )
-{
-	Resource *geoRes = Modules::resMan().resolveResHandle( geometryRes );
-	APIFUNC_VALIDATE_RES_TYPE( geoRes, ResourceTypes::Geometry, "h3dInitModularGeo", 0 );
-	GeometryResource* geo = (GeometryResource *)geoRes;
-	GeometryResource* res = geo->initModularGeo();
-	return Modules::resMan().addResource(*res);
-}
-
-H3D_IMPL void h3dAppendModularGeo( ResHandle modGeo, ResHandle otherGeo, float* seamx, float* seamy, float* seamz, uint seamCount, bool x_sym)
-{
-	Resource *modGeoRes = Modules::resMan().resolveResHandle( modGeo );
-	APIFUNC_VALIDATE_RES_TYPE( modGeoRes, ResourceTypes::Geometry, "h3dAppendModularGeo", APIFUNC_RET_VOID );
-
-	Resource *othergeoRes = Modules::resMan().resolveResHandle( otherGeo );
-	APIFUNC_VALIDATE_RES_TYPE( othergeoRes, ResourceTypes::Geometry, "h3dAppendModularGeo", APIFUNC_RET_VOID );
-
-	GeometryResource* geo = (GeometryResource *)modGeoRes;
-	geo->appendModularGeo((GeometryResource *)othergeoRes, seamx, seamy, seamz, seamCount, x_sym);
-}
-
-H3D_IMPL void h3dCompleteModularGeo( ResHandle geometryRes )
-{
-	Resource *geoRes = Modules::resMan().resolveResHandle( geometryRes );
-	APIFUNC_VALIDATE_RES_TYPE( geoRes, ResourceTypes::Geometry, "h3dCompleteModularGeo", APIFUNC_RET_VOID );
-	GeometryResource* geo = (GeometryResource *)geoRes;
-	geo->completeModularGeo();
 }
 
 

@@ -33,7 +33,7 @@ using namespace std;
 SceneNode::SceneNode( const SceneNodeTpl &tpl ) :
 	_name( tpl.name ), _attachment( tpl.attachmentString ), _parent( 0x0 ), _type( tpl.type ),
 	_handle( 0 ), _sgHandle( 0 ), _flags( 0 ), _sortKey( 0 ), _dirty( true ), _transformed( true ),
-	_renderable( false ), _lodSupported( false ), _occlusionCullingSupported( false )
+	_renderable( false )
 {
 	_relTrans = Matrix4f::ScaleMat( tpl.scale.x, tpl.scale.y, tpl.scale.z );
 	_relTrans.rotate( degToRad( tpl.rot.x ), degToRad( tpl.rot.y ), degToRad( tpl.rot.z ) );
@@ -167,27 +167,6 @@ void SceneNode::setParamStr( int param, const char *value )
 
 	Modules::setError( "Invalid param in h3dSetNodeParamStr" );
 }
-
-
-uint32 SceneNode::calcLodLevel( const Vec3f &viewPoint ) const
-{
-	return 0;
-}
-
-
-bool SceneNode::checkLodCorrectness( uint32 lodLevel ) const
-{
-	return true;
-}
-
-
-uint32 SceneNode::getOcclusionResult( uint32 occlusionSet )
-{
-	if ( occlusionSet >= _occQueries.size() ) return Math::MaxUInt32; 
-	
-	return _occQueries[ occlusionSet ];
-}
-
 
 bool SceneNode::canAttach( SceneNode &/*parent*/ ) const
 {
@@ -389,12 +368,7 @@ void SpatialGraph::updateQueues( const Frustum &frustum1, const Frustum *frustum
 			if( !frustum1.cullBox( node->_bBox ) &&
 				(frustum2 == 0x0 || !frustum2->cullBox( node->_bBox )) )
 			{
-				if( node->_lodSupported )
-				{
-					uint32 curLod = node->calcLodLevel( camPos );
-					if ( !node->checkLodCorrectness( curLod ) ) continue;
-				}
-				
+
 				float sortKey;
 
 				switch( order )
@@ -428,7 +402,7 @@ void SpatialGraph::updateQueues( const Frustum &frustum1, const Frustum *frustum
 }
 
 
-void SpatialGraph::updateQueues( uint32 filterIgnore, bool forceUpdateAllViews /*= false*/, bool preparingViews /* = false*/ )
+void SpatialGraph::updateQueues( uint32 filterIgnore, bool forceUpdateAllViews /*= false*/ )
 {
 	// Check that some views are still not updated
 	if ( !forceUpdateAllViews )
@@ -450,11 +424,7 @@ void SpatialGraph::updateQueues( uint32 filterIgnore, bool forceUpdateAllViews /
 		}
 	}
 
-	// Updating nodes during render view preparation is unnecessary
-	// because it is done as the first action and nodes do not change
-	// during render view preparation
-	if ( !preparingViews )
-		Modules::sceneMan().updateNodes();
+	Modules::sceneMan().updateNodes();
 
 	Vec3f camPos;
 	if ( Modules::renderer().getCurCamera() != 0x0 )
@@ -475,11 +445,27 @@ void SpatialGraph::updateQueues( uint32 filterIgnore, bool forceUpdateAllViews /
 	RenderView *v = nullptr;
 	RenderView *cameraView = &_views[ 0 ];
 
+	// original H3D :
+	// go through all renderable nodes
+	//		go through all views
+	//			cull on bbox -> if not culled : add to render queue of that view
+
+	// optimization :
+	// fill a list of indices each frame
+	// indices of the meshes in _nodes
+	// indices are ordered :
+	//		goal is to reduce state changes in drawMeshes function
+	//		also : can cull by not using indices instead of the flags
+
 	// Culling
-	for ( size_t i = 0, s = _nodes.size(); i < s; ++i )
+//	for ( size_t i = 0, s = _nodes.size(); i < s; ++i )
+	for ( size_t i = 0; i < _customQueue.size(); i++ )
 	{
-		SceneNode *node = _nodes[ i ];
+//		SceneNode *node = _nodes[ i ];
+		SceneNode *node = _nodes[ _customQueue [i] ];
 		if ( node == 0x0 || ( node->_flags & filterIgnore ) || !node->_renderable ) continue;
+
+//		printf("node name %s\n", node->_name.c_str());
 
 		for ( size_t view = 0; view < _totalViews; ++view )
 		{
@@ -492,16 +478,6 @@ void SpatialGraph::updateQueues( uint32 filterIgnore, bool forceUpdateAllViews /
 				{
 					// View can have a linked view. If it does, perform additional culling with the frustum of that view
 					if ( v->linkedView != -1 && _views[ v->linkedView ].frustum.cullBox( node->_bBox ) ) continue;
-				}
-// 				else
-// 				{
-// 					// Check lod only for first view (camera)
-// 				}
-
-				if ( node->_lodSupported )
-				{
-					uint32 curLod = node->calcLodLevel( camPos );
-					if ( !node->checkLodCorrectness( curLod ) ) continue;
 				}
 
 				// Calculate bounding box for all objects in the view
@@ -711,9 +687,9 @@ void SceneManager::updateQueues( const Frustum &frustum1, const Frustum *frustum
 }
 
 
-void SceneManager::updateQueues( uint32 filterIgnore, bool forceUpdateAllViews /* = false */, bool preparingViews /* = false */ )
+void SceneManager::updateQueues( uint32 filterIgnore, bool forceUpdateAllViews /* = false */ )
 {
-	_spatialGraph->updateQueues( filterIgnore, forceUpdateAllViews, preparingViews );
+	_spatialGraph->updateQueues( filterIgnore, forceUpdateAllViews );
 }
 
 
@@ -902,6 +878,15 @@ bool SceneManager::relocateNode( SceneNode &node, SceneNode &parent )
 	return true;
 }
 
+void SceneManager::customQueueAdd(int mesh)
+{
+	_spatialGraph->_customQueue.push_back(mesh);
+}
+
+void SceneManager::customQueueClear()
+{
+	_spatialGraph->_customQueue.clear();
+}
 
 int SceneManager::findNodes( SceneNode &startNode, const string &name, int type )
 {
@@ -998,25 +983,15 @@ bool SceneManager::getCastRayResult( int index, CastRayResult &crr )
 }
 
 
-int SceneManager::checkNodeVisibility( SceneNode &node, CameraNode &cam, bool checkOcclusion, bool calcLod )
+int SceneManager::checkNodeVisibility( SceneNode &node, CameraNode &cam )
 {
 	if( node._dirty ) updateNodes();
 
 	RenderDeviceInterface *rdi = Modules::renderer().getRenderDevice();
-
-	// Check occlusion
-	if( checkOcclusion && cam._occSet >= 0 && node.checkOcclusionSupported() )
-	{
-		uint32 query = node.getOcclusionResult( cam._occSet );
-		if ( query != Math::MaxUInt32 && rdi->getQueryResult( query ) < 1 ) // Math::MaxUInt32 means incorrect result
-			return -1;
-	}
 	
 	// Frustum culling
 	if( cam.getFrustum().cullBox( node.getBBox() ) )
 		return -1;
-	else if( calcLod )
-		return node.calcLodLevel( cam.getAbsPos() );
 	else
 		return 0;
 }

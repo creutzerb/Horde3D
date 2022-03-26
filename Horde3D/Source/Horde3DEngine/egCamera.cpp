@@ -36,7 +36,6 @@ CameraNode::CameraNode( const CameraNodeTpl &cameraTpl ) :
 	_frustNear = cameraTpl.nearPlane;
 	_frustFar = cameraTpl.farPlane;
 	_orthographic = cameraTpl.orthographic;
-	_occSet = cameraTpl.occlusionCulling ? Modules::renderer().registerOccSet() : -1;
 	_manualProjMat = false;
 }
 
@@ -45,7 +44,6 @@ CameraNode::~CameraNode()
 {
 	_pipelineRes = 0x0;
 	_outputTex = 0x0;
-	if( _occSet >= 0 ) Modules::renderer().unregisterOccSet( _occSet );
 }
 
 
@@ -91,14 +89,6 @@ SceneNodeTpl *CameraNode::parsingFunc( map< string, string > &attribs )
 		else
 			cameraTpl->orthographic = false;
 	}
-	itr = attribs.find( "occlusionCulling" );
-	if( itr != attribs.end() ) 
-	{
-		if ( _stricmp( itr->second.c_str(), "true" ) == 0 || _stricmp( itr->second.c_str(), "1" ) == 0 )
-			cameraTpl->occlusionCulling = true;
-		else
-			cameraTpl->occlusionCulling = false;
-	}
 
 	if( !result )
 	{
@@ -137,8 +127,6 @@ int CameraNode::getParamI( int param ) const
 		return _vpHeight;
 	case CameraNodeParams::OrthoI:
 		return _orthographic ? 1 : 0;
-	case CameraNodeParams::OccCullingI:
-		return _occSet >= 0 ? 1 : 0;
 	}
 
 	return SceneNode::getParamI( param );
@@ -184,17 +172,6 @@ void CameraNode::setParamI( int param, int value )
 	case CameraNodeParams::OrthoI:
 		_orthographic = (value == 1);
 		markDirty();
-		return;
-	case CameraNodeParams::OccCullingI:
-		if( _occSet < 0 && value != 0 )
-		{		
-			_occSet = Modules::renderer().registerOccSet();
-		}
-		else if( _occSet >= 0 && value == 0 )
-		{
-			Modules::renderer().unregisterOccSet( _occSet );
-			_occSet = -1;
-		}
 		return;
 	}
 

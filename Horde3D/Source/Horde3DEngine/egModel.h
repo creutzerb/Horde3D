@@ -36,10 +36,6 @@ struct ModelNodeParams
 	{
 		GeoResI = 200,
 		SWSkinningI,
-		LodDist1F,
-		LodDist2F,
-		LodDist3F,
-		LodDist4F,
 		AnimCountI
 	};
 };
@@ -59,13 +55,10 @@ struct ModelUpdateFlags
 struct ModelNodeTpl : public SceneNodeTpl
 {
 	PGeometryResource  geoRes;
-	float              lodDist1, lodDist2, lodDist3, lodDist4;
 	bool               softwareSkinning;
 
 	ModelNodeTpl( const std::string &name, GeometryResource *geoRes ) :
 		SceneNodeTpl( SceneNodeTypes::Model, name ), geoRes( geoRes ),
-			lodDist1( Math::MaxFloat ), lodDist2( Math::MaxFloat ),
-			lodDist3( Math::MaxFloat ), lodDist4( Math::MaxFloat ),
 			softwareSkinning( false )
 	{
 	}
@@ -103,7 +96,6 @@ public:
 	void setParamF( int param, int compIdx, float value );
 
 	void update( int flags );
-	uint32 calcLodLevel( const Vec3f &viewPoint ) const;
 
 	void setCustomInstData( const float *data, uint32 count );
 
@@ -114,6 +106,8 @@ public:
 		  _skinMatRows[index * 3 + 1] = mat.getRow( 1 );
 		  _skinMatRows[index * 3 + 2] = mat.getRow( 2 ); }
 	void markNodeListDirty() { _nodeListDirty = true; }
+
+	int get_meshes(int **handles);
 
 protected:
 	ModelNode( const ModelNodeTpl &modelTpl );
@@ -130,7 +124,6 @@ protected:
 protected:
 	PGeometryResource             _geometryRes;
 	PGeometryResource             _baseGeoRes;	// NULL if model does not have a private geometry copy
-	float                         _lodDist1, _lodDist2, _lodDist3, _lodDist4;
 	
 	std::vector< MeshNode * >     _meshList;  // List of the model's meshes
 	std::vector< JointNode * >    _jointList;

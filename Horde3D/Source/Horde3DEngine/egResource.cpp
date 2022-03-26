@@ -55,6 +55,12 @@ Resource *Resource::clone()
 	return 0x0;
 }
 
+Resource *Resource::vertColorClone()
+{
+	Modules::log().writeDebugInfo( "Resource cloning (vertColor) not implemented for type %i", _type );
+	return 0x0;
+}
+
 
 void Resource::initDefault()
 {
@@ -348,6 +354,39 @@ ResHandle ResourceManager::cloneResource( Resource &sourceRes, const string &nam
 	newRes->_refCount = 0;
 	int handle = addResource( *newRes );
 	
+	if( name == "" )
+	{
+		stringstream ss;
+		ss << sourceRes._name << "|" << handle;
+		newRes->_name = ss.str();
+	}
+
+	return handle;
+}
+
+ResHandle ResourceManager::cloneResourceAddVertColor( Resource &sourceRes, const string &name )
+{
+	// Check that name does not yet exist
+	if( name != "" )
+	{
+		for( uint32 i = 0; i < _resources.size(); ++i )
+		{
+			if( _resources[i] != 0x0 && _resources[i]->_name == name )
+			{
+				Modules::log().writeDebugInfo( "Name '%s' used for h3dCloneResource already exists", name.c_str() );
+				return 0;
+			}
+		}
+	}
+
+	Resource *newRes = sourceRes.vertColorClone();
+	if( newRes == 0x0 ) return 0;
+
+	newRes->_name = name != "" ? name : "|tmp|";
+	newRes->_userRefCount = 1;
+	newRes->_refCount = 0;
+	int handle = addResource( *newRes );
+
 	if( name == "" )
 	{
 		stringstream ss;

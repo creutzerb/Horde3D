@@ -127,10 +127,6 @@ void printHelp()
 	log( "-noGeoOpt         disable geometry optimization" );
 	log( "-overwriteMats    force update of existing materials" );
 	log( "-addModelName     adds model name before material name" );
-	log( "-lodDist1 dist    distance for LOD1" );
-	log( "-lodDist2 dist    distance for LOD2" );
-	log( "-lodDist3 dist    distance for LOD3" );
-	log( "-lodDist4 dist    distance for LOD4" );
 	log( "-useMaterialId    use material id instead of material name" );
 }
 
@@ -154,7 +150,6 @@ int main( int argc, char **argv )
 	string input = argv[1], basePath = "./", outPath = "./";
 	AssetTypes::List assetType = AssetTypes::Model;
 	bool geoOpt = true, overwriteMats = false, addModelName = false, useMaterialId = false;
-	float lodDists[4] = { 10, 20, 40, 80 };
 	string modelName = "";	
 
 	// Make sure that first argument ist not an option
@@ -192,16 +187,6 @@ int main( int argc, char **argv )
 		else if( _stricmp( arg.c_str(), "-overwriteMats" ) == 0 )
 		{
 			overwriteMats = true;
-		}
-		else if( (_stricmp( arg.c_str(), "-lodDist1" ) == 0 || _stricmp( arg.c_str(), "-lodDist2" ) == 0 ||
-		          _stricmp( arg.c_str(), "-lodDist3" ) == 0 || _stricmp( arg.c_str(), "-lodDist4" ) == 0) && argc > i + 1 )
-		{
-			int index = 0;
-			if( _stricmp( arg.c_str(), "-lodDist2" ) == 0 ) index = 1;
-			else if( _stricmp( arg.c_str(), "-lodDist3" ) == 0 ) index = 2;
-			else if( _stricmp( arg.c_str(), "-lodDist4" ) == 0 ) index = 3;
-			
-			lodDists[index] = toFloat( argv[++i] );
 		}
 		else if( _stricmp( arg.c_str(), "-addModelName" ) == 0 )
 		{
@@ -294,7 +279,7 @@ int main( int argc, char **argv )
 			if( assetType == AssetTypes::Model )
 			{
 				log( "Compiling model data..." );
-				Converter *converter = new Converter( *daeDoc, outPath, lodDists );
+				Converter *converter = new Converter( *daeDoc, outPath );
 				converter->convertModel( geoOpt );
 				
 				createDirectories( outPath, assetPath );
@@ -306,7 +291,7 @@ int main( int argc, char **argv )
 			else if( assetType == AssetTypes::Animation )
 			{	
 				log( "Compiling animation data..." );
-				Converter *converter = new Converter( *daeDoc, outPath, lodDists );
+				Converter *converter = new Converter( *daeDoc, outPath );
 				converter->convertModel( false );
 				
 				if( converter->hasAnimation() )

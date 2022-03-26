@@ -544,12 +544,6 @@ protected:
 	RDIDelegate< bool ( uint32, int, int *, int *, int *, void *, int ) > _delegate_getRenderBufferData;
 	RDIDelegate< void ( uint32, int *, int * ) >						_delegate_getRenderBufferDimensions;
 
-	RDIDelegate< uint32 () >											_delegate_createOcclusionQuery;
-	RDIDelegate< void ( uint32 ) >										_delegate_destroyQuery;
-	RDIDelegate< void ( uint32 ) >										_delegate_beginQuery;
-	RDIDelegate< void ( uint32 ) >										_delegate_endQuery;
-	RDIDelegate< uint32 ( uint32 ) >									_delegate_getQueryResult;
-
 	RDIDelegate< GPUTimer * () >										_delegate_createGPUTimer;
 
 	RDIDelegate< bool ( uint32 ) >										_delegate_commitStates;
@@ -843,28 +837,6 @@ public:
 	void getRenderBufferDimensions( uint32 rbObj, int *width, int *height )
 	{
 		_delegate_getRenderBufferDimensions.invoke( rbObj, width, height );
-	}
-
-	// Queries
-	uint32 createOcclusionQuery() 
-	{
-		return _delegate_createOcclusionQuery.invoke();
-	}
-	void destroyQuery( uint32 queryObj ) 
-	{
-		_delegate_destroyQuery.invoke( queryObj );
-	}
-	void beginQuery( uint32 queryObj ) 
-	{ 
-		_delegate_beginQuery.invoke( queryObj );
-	}
-	void endQuery( uint32 queryObj ) 
-	{ 
-		_delegate_endQuery.invoke( queryObj );
-	}
-	uint32 getQueryResult( uint32 queryObj )  
-	{
-		return _delegate_getQueryResult.invoke( queryObj );
 	}
 
 	// Render Device dependent GPU Timer

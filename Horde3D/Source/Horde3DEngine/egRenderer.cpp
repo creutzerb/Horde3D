@@ -21,6 +21,8 @@
 
 #include "utDebug.h"
 
+#include <iostream>
+
 #if defined ( DESKTOP_OPENGL_AVAILABLE ) && !defined( H3D_USE_GLES3 )
 #	if defined( H3D_USE_GL2 )
 #		include "egRendererBaseGL2.h"
@@ -59,16 +61,13 @@ Renderer::Renderer()
 	_vlPosOnly = 0;
 	_vlModel = 0;
 	_vlParticle = 0;
+	_vlModelVertColor = 0;
 
 	_particleGeo = 0;
 	_cubeGeo = 0;
 	_sphereGeo = 0;
 	_coneGeo = 0;
 	_FSPolyGeo = 0;
-
-	// reserve memory for occlusion culling proxies
-	_occProxies[ 0 ].reserve( 200 ); // meshes
-	_occProxies[ 1 ].reserve( 100 ); // lights
 
 	// create default engine uniforms that will be automatically searched for in every shader
 	_engineUniforms.reserve( 64 );
@@ -239,6 +238,18 @@ bool Renderer::init( RenderBackendType::List type )
 	};
 	_vlModel = _renderDevice->registerVertexLayout( 7, attribsModel );
 
+	VertexLayoutAttrib attribsModelVertColor[8] = {
+		{"vertPos", 0, 3, 0},
+		{"normal", 1, 3, 0},
+		{"tangent", 2, 4, 0},
+		{"joints", 3, 4, 8},
+		{"weights", 3, 4, 24},
+		{"texCoords0", 3, 2, 0},
+		{"texCoords1", 3, 2, 40},
+		{"vertColorIn", 4, 4, 0}
+	};
+	_vlModelVertColor = _renderDevice->registerVertexLayout( 8, attribsModelVertColor );
+
 	VertexLayoutAttrib attribsParticle[2] = {
 		{"texCoords0", 0, 2, 0},
 		{"parIdx", 0, 1, 8}
@@ -393,6 +404,9 @@ uint32 Renderer::getDefaultVertexLayout( DefaultVertexLayouts::List vl ) const
 		case DefaultVertexLayouts::Model:
 			return _vlModel;
 			break;
+		case DefaultVertexLayouts::ModelVertColor:
+			return _vlModelVertColor;
+			break;
 		default:
 			break;
 	}
@@ -541,9 +555,9 @@ void Renderer::prepareRenderViews()
 	// Clear old views 
 	scm.clearRenderViews();
 
-	// Update all nodes before preparing render views. This eliminates problems with frustum culling 
-	// lagging one frame behind for lights and camera movements.
-	scm.updateNodes();
+	// WARNING! Currently lighting will not be present in the first frame, because scene update will happen
+	// after lights addition to render views. If that behavior is not desirable uncomment the following statement (may reduce performance a bit)
+//	scm.updateNodes();
 
 	//
 	// Step 1. Add views for camera and lights based on their frustums
@@ -568,7 +582,7 @@ void Renderer::prepareRenderViews()
 	}
 
 	// Generate render queue for camera and lights
-	scm.updateQueues( SceneNodeFlags::NoDraw, false, true );
+	scm.updateQueues( SceneNodeFlags::NoDraw );
 
 	//
 	// Step 2. Create temporary crop shadow frustums that are used for creating tighter shadow frustums to increase shadow quality
@@ -576,7 +590,7 @@ void Renderer::prepareRenderViews()
 	auto &views = scm.getRenderViews(); auto count = scm.getActiveRenderViewCount();
 	int shadowViewStartID = count;
 	int processedLightsCount = 0;
-	for ( size_t i = 0; i < count; ++i )
+	for ( int i = 0; i < count; ++i )
 	{
 		RenderView *view = &views[ i ];
 		if ( view->type != RenderViewType::Light ) continue;
@@ -592,7 +606,7 @@ void Renderer::prepareRenderViews()
 	}
 
 	// Prepare render queues for crop frustums
-	scm.updateQueues( SceneNodeFlags::NoDraw | SceneNodeFlags::NoCastShadow, false, true );
+	scm.updateQueues( SceneNodeFlags::NoDraw | SceneNodeFlags::NoCastShadow );
 
 	//
 	// Step 3. Calculate final shadow frustums
@@ -612,7 +626,7 @@ void Renderer::prepareRenderViews()
 	}
 
 	// Shadow frustums are ready, prepare render queues for them
-	scm.updateQueues( SceneNodeFlags::NoDraw | SceneNodeFlags::NoCastShadow, false, true );
+	scm.updateQueues( SceneNodeFlags::NoDraw | SceneNodeFlags::NoCastShadow );
 
 	timer->setEnabled( false );
 }
@@ -1194,8 +1208,13 @@ int Renderer::prepareCropFrustum( const LightNode *light, const BoundingBox &vie
 		// Get light projection matrix
 		float ymax = _curCamera->_frustNear * tanf( degToRad( light->_fov / 2 ) );
 		float xmax = ymax * 1.0f;  // ymax * aspect
-		params.lightProjMatrix[ i ] = Matrix4f::PerspectiveMat(
-			-xmax, xmax, -ymax, ymax, _curCamera->_frustNear, light->_radius );
+//		params.lightProjMatrix[ i ] = Matrix4f::PerspectiveMat(
+//			-xmax, xmax, -ymax, ymax, _curCamera->_frustNear, light->_radius );
+
+		// default ortho matrix is VERY small
+		const float mult = 200.f;
+		params.lightProjMatrix[ i ] = Matrix4f::OrthoMat(
+			-xmax * mult, xmax * mult, -ymax * mult, ymax * mult, _curCamera->_frustNear, light->_radius );
 
 		// Create and store view and other shadow parameters
 		Modules::sceneMan().addRenderView( RenderViewType::Shadow, ( SceneNode * ) light, frustum, /*linkedLightView*/ -1 );
@@ -1300,7 +1319,7 @@ void Renderer::updateShadowMap()
 		// Render
 		Modules::sceneMan().setCurrentView( params.viewID[ i ] );
 		Frustum &f = Modules::sceneMan().getRenderViews()[ params.viewID[ i ] ].frustum;
-		drawRenderables( _curLight->_shadowContext, 0, false, &f, 0x0, RenderingOrder::None, -1 );
+		drawRenderables( _curLight->_shadowContext, 0, false, &f, 0x0, RenderingOrder::None );
 	}
 
 	// Map from post-projective space [-1,1] to texture space [0,1]
@@ -1318,74 +1337,6 @@ void Renderer::updateShadowMap()
 	_renderDevice->setViewport( prevVPX, prevVPY, prevVPWidth, prevVPHeight );
 	_renderDevice->setRenderBuffer( prevRendBuf );
 	_renderDevice->setColorWriteMask( true );
-}
-
-// =================================================================================================
-// Occlusion Culling
-// =================================================================================================
-
-int Renderer::registerOccSet()
-{
-	for( int i = 0; i < (int)_occSets.size(); ++i )
-	{
-		if( _occSets[i] == 0 )
-		{
-			_occSets[i] = 1;
-			return i;
-		}
-	}
-
-	_occSets.push_back( 1 );
-	return (int)_occSets.size() - 1;
-}
-
-
-void Renderer::unregisterOccSet( int occSet )
-{
-	if( occSet >= 0 && occSet < (int)_occSets.size() )
-		_occSets[occSet] = 0;
-}
-
-
-void Renderer::drawOccProxies( uint32 list )
-{
-	ASSERT( list < 2 );
-
-	bool prevColorMask, prevDepthMask;
-	_renderDevice->getColorWriteMask( prevColorMask );
-	_renderDevice->getDepthMask( prevDepthMask );
-	
-	setMaterial( 0x0, "" );
-	_renderDevice->setColorWriteMask( false );
-	_renderDevice->setDepthMask( false );
-	
-	setShaderComb( &Modules::renderer()._defColorShader );
-	commitGeneralUniforms();
-
-	_renderDevice->setGeometry( _cubeGeo );
-
-	// Draw occlusion proxies
-	for( size_t i = 0, s = _occProxies[list].size(); i < s; ++i )
-	{
-		OccProxy &proxy = _occProxies[list][i];
-
-		_renderDevice->beginQuery( proxy.queryObj );
-		
-		Matrix4f mat = Matrix4f::TransMat( proxy.bbMin.x, proxy.bbMin.y, proxy.bbMin.z ) *
-			Matrix4f::ScaleMat( proxy.bbMax.x - proxy.bbMin.x, proxy.bbMax.y - proxy.bbMin.y, proxy.bbMax.z - proxy.bbMin.z );
-		_renderDevice->setShaderConst( _curShader->uniLocs[ _uni.worldMat ], CONST_FLOAT44, &mat.x[0] );
-
-		// Draw AABB
-		_renderDevice->drawIndexed( PRIM_TRILIST, 0, 36, 0, 8 );
-
-		_renderDevice->endQuery( proxy.queryObj );
-	}
-
-	setShaderComb( 0x0 );
-	_renderDevice->setColorWriteMask( prevColorMask );
-	_renderDevice->setDepthMask( prevDepthMask );
-
-	_occProxies[list].resize( 0 );
 }
 
 
@@ -1466,18 +1417,19 @@ void Renderer::drawFSQuad( Resource *matRes, const string &shaderContext )
 
 
 void Renderer::drawGeometry( const string &shaderContext, int theClass,
-                             RenderingOrder::List order, int occSet )
+							 RenderingOrder::List order )
 {
 	Modules::sceneMan().setCurrentView( defaultCameraView );
-	Modules::sceneMan().sortViewObjects( order );
+	// I order them as I put them in the customQueue
+//	Modules::sceneMan().sortViewObjects( order );
 	
 	setupViewMatrices( _curCamera->getViewMat(), _curCamera->getProjMat() );
-	drawRenderables( shaderContext, theClass, false, &_curCamera->getFrustum(), 0x0, order, occSet );
+	drawRenderables( shaderContext, theClass, false, &_curCamera->getFrustum(), 0x0, order );
 }
 
 
 void Renderer::drawLightGeometry( const string &shaderContext, int theClass,
-                                  bool noShadows, RenderingOrder::List order, int occSet )
+								  bool noShadows, RenderingOrder::List order )
 {
 // 	Modules::sceneMan().updateQueues( _curCamera->getFrustum(), 0x0, RenderingOrder::None,
 // 	                                  SceneNodeFlags::NoDraw, true, false );
@@ -1488,43 +1440,6 @@ void Renderer::drawLightGeometry( const string &shaderContext, int theClass,
 	for( size_t i = 0, s = Modules::sceneMan().getLightQueue().size(); i < s; ++i )
 	{
 		_curLight = (LightNode *)Modules::sceneMan().getLightQueue()[i];
-
-		// Check if light is occluded
-		if( occSet >= 0 )
-		{
-			if( occSet > (int)_curLight->_occQueries.size() - 1 )
-			{
-				_curLight->_occQueries.resize( occSet + 1, 0 );
-				_curLight->_occQueriesLastVisited.resize( occSet + 1, 0 );
-			}
-			if( _curLight->_occQueries[occSet] == 0 )
-			{
-				_curLight->_occQueries[occSet] = _renderDevice->createOcclusionQuery();
-				_curLight->_occQueriesLastVisited[occSet] = 0;
-			}
-			else
-			{
-				if( _curLight->_occQueriesLastVisited[occSet] != Modules::renderer().getFrameID() )
-				{
-					_curLight->_occQueriesLastVisited[occSet] = Modules::renderer().getFrameID();
-				
-					Vec3f bbMin, bbMax;
-					_curLight->getFrustum().calcAABB( bbMin, bbMax );
-					
-					// Check that viewer is outside light bounds
-					if( nearestDistToAABB( _curCamera->getFrustum().getOrigin(), bbMin, bbMax ) > 0 )
-					{
-						Modules::renderer().pushOccProxy( 1, bbMin, bbMax, _curLight->_occQueries[occSet] );
-
-						// Check query result from previous frame
-						if( _renderDevice->getQueryResult( _curLight->_occQueries[occSet] ) < 1 )
-						{
-							continue;
-						}
-					}
-				}
-			}
-		}
 	
 		// Update shadow map
 		if( !noShadows && _curLight->_shadowMapCount > 0 )
@@ -1550,22 +1465,22 @@ void Renderer::drawLightGeometry( const string &shaderContext, int theClass,
 		                                bbx, bby, bbw, bbh );
 
 		// Set scissor rectangle
-		if( bbx != 0 || bby != 0 || bbw != 1 || bbh != 1 )
-		{
-			_renderDevice->setScissorRect( ftoi_r( bbx * _renderDevice->_fbWidth ), ftoi_r( bby * _renderDevice->_fbHeight ),
-			                      ftoi_r( bbw * _renderDevice->_fbWidth ), ftoi_r( bbh * _renderDevice->_fbHeight ) );
-			_renderDevice->setScissorTest( true );
-		}
+//		if( bbx != 0 || bby != 0 || bbw != 1 || bbh != 1 )
+//		{
+//			_renderDevice->setScissorRect( ftoi_r( bbx * _renderDevice->_fbWidth ), ftoi_r( bby * _renderDevice->_fbHeight ),
+//			                      ftoi_r( bbw * _renderDevice->_fbWidth ), ftoi_r( bbh * _renderDevice->_fbHeight ) );
+//			_renderDevice->setScissorTest( true );
+//		}
 		
 		// Render
 		Modules::sceneMan().setCurrentView( _curLight->_renderViewID );
-		Modules::sceneMan().sortViewObjects( order );
+//		Modules::sceneMan().sortViewObjects( order );
 // 		Modules::sceneMan().updateQueues( _curCamera->getFrustum(), &_curLight->getFrustum(),
 // 		                                  order, SceneNodeFlags::NoDraw, false, true );
 		setupViewMatrices( _curCamera->getViewMat(), _curCamera->getProjMat() );
 		drawRenderables( shaderContext.empty() ? _curLight->_lightingContext : shaderContext,
 		                 theClass, false, &_curCamera->getFrustum(),
-		                 &_curLight->getFrustum(), order, occSet );
+						 &_curLight->getFrustum(), order );
 		Modules().stats().incStat( EngineStats::LightPassCount, 1 );
 
 		// Reset
@@ -1575,135 +1490,6 @@ void Renderer::drawLightGeometry( const string &shaderContext, int theClass,
 	_curLight = 0x0;
 
 	timer->endQuery();
-
-	// Draw occlusion proxies
-	if( occSet >= 0 )
-	{
-		setupViewMatrices( _curCamera->getViewMat(), _curCamera->getProjMat() );
-		Modules::renderer().drawOccProxies( OCCPROXYLIST_LIGHTS );
-	}
-}
-
-
-void Renderer::drawLightShapes( const string &shaderContext, bool noShadows, int occSet )
-{
-	MaterialResource *curMatRes = 0x0;
-	
-// 	Modules::sceneMan().updateQueues( _curCamera->getFrustum(), 0x0, RenderingOrder::None,
-// 	                                  SceneNodeFlags::NoDraw, true, false );
-	
-	GPUTimer *timer = Modules::stats().getGPUTimer( EngineStats::DefLightsGPUTime );
-	if( Modules::config().gatherTimeStats ) timer->beginQuery( _frameID );
-	
-	auto &views = Modules::sceneMan().getRenderViews();
-	for ( size_t i = 0, s = views.size(); i < s; ++i )
-	{
-		if ( views[ i ].type != RenderViewType::Light ) continue;
-
-		_curLight = ( LightNode * ) views[ i ].node;
-
-		// Check if light is occluded
-		if( occSet >= 0 )
-		{
-			if( occSet > (int)_curLight->_occQueries.size() - 1 )
-			{
-				_curLight->_occQueries.resize( occSet + 1, 0 );
-				_curLight->_occQueriesLastVisited.resize( occSet + 1, 0 );
-			}
-			if( _curLight->_occQueries[occSet] == 0 )
-			{
-				_curLight->_occQueries[occSet] = _renderDevice->createOcclusionQuery();
-				_curLight->_occQueriesLastVisited[occSet] = 0;
-			}
-			else
-			{
-				if( _curLight->_occQueriesLastVisited[occSet] != Modules::renderer().getFrameID() )
-				{
-					_curLight->_occQueriesLastVisited[occSet] = Modules::renderer().getFrameID();
-				
-					Vec3f bbMin, bbMax;
-					_curLight->getFrustum().calcAABB( bbMin, bbMax );
-					
-					// Check that viewer is outside light bounds
-					if( nearestDistToAABB( _curCamera->getFrustum().getOrigin(), bbMin, bbMax ) > 0 )
-					{
-						Modules::renderer().pushOccProxy( 1, bbMin, bbMax, _curLight->_occQueries[occSet] );
-
-						// Check query result from previous frame
-						if( _renderDevice->getQueryResult( _curLight->_occQueries[occSet] ) < 1 )
-						{
-							continue;
-						}
-					}
-				}
-			}
-		}
-		
-		// Update shadow map
-		if( !noShadows && _curLight->_shadowMapCount > 0 )
-		{	
-			timer->endQuery();
-			GPUTimer *timerShadows = Modules::stats().getGPUTimer( EngineStats::ShadowsGPUTime );
-			if( Modules::config().gatherTimeStats ) timerShadows->beginQuery( _frameID );
-			
-			updateShadowMap();
-			setupShadowMap( false );
-			curMatRes = 0x0;
-			
-			timerShadows->endQuery();
-			if( Modules::config().gatherTimeStats ) timer->beginQuery( _frameID );
-		}
-		else
-		{
-			setupShadowMap( true );
-		}
-
-		setupViewMatrices( _curCamera->getViewMat(), _curCamera->getProjMat() );
-
-		if( curMatRes != _curLight->_materialRes )
-		{
-			if( !setMaterial( _curLight->_materialRes,
-				              shaderContext.empty() ? _curLight->_lightingContext : shaderContext ) )
-			{
-				continue;
-			}
-			curMatRes = _curLight->_materialRes;
-		}
-		else
-		{
-			commitGeneralUniforms();
-		}
-
-		_renderDevice->setCullMode( RS_CULL_FRONT );
-		_renderDevice->setDepthTest( false );
-
-		if( _curLight->_fov < 180 )
-		{
-			float r = _curLight->_radius * tanf( degToRad( _curLight->_fov / 2 ) );
-			drawCone( _curLight->_radius, r, _curLight->_absTrans );
-		}
-		else
-		{
-			drawSphere( _curLight->_absPos, _curLight->_radius );
-		}
-
-		Modules().stats().incStat( EngineStats::LightPassCount, 1 );
-
-		// Reset
-		_renderDevice->setCullMode( RS_CULL_BACK );
-		_renderDevice->setDepthTest( true );
-	}
-
-	_curLight = 0x0;
-
-	timer->endQuery();
-
-	// Draw occlusion proxies
-	if( occSet >= 0 )
-	{
-		setupViewMatrices( _curCamera->getViewMat(), _curCamera->getProjMat() );
-		Modules::renderer().drawOccProxies( OCCPROXYLIST_LIGHTS );
-	}
 }
 
 void Renderer::dispatchCompute( MaterialResource *materialRes, const std::string &context, uint32 groups_x, uint32 groups_y, uint32 groups_z )
@@ -1725,8 +1511,7 @@ void Renderer::dispatchCompute( MaterialResource *materialRes, const std::string
 // =================================================================================================
 
 void Renderer::drawRenderables( const string &shaderContext, int theClass, bool debugView,
-                                const Frustum *frust1, const Frustum *frust2, RenderingOrder::List order,
-                                int occSet )
+								const Frustum *frust1, const Frustum *frust2, RenderingOrder::List order )
 {
 	ASSERT( _curCamera != 0x0 );
 	
@@ -1750,13 +1535,15 @@ void Renderer::drawRenderables( const string &shaderContext, int theClass, bool 
 		{
 			++lastItem;
 		}
+
+//		std::cout << "render func lastItem " << lastItem << std::endl;
 		
 		for( uint32 i = 0, si = (uint32)_renderFuncRegistry.size(); i < si; ++i )
 		{
 			if( _renderFuncRegistry[i].nodeType == renderQueue[firstItem].type )
 			{
 				_renderFuncRegistry[i].renderFunc(
-					firstItem, lastItem, shaderContext, theClass, debugView, frust1, frust2, order, occSet );
+					firstItem, lastItem, shaderContext, theClass, debugView, frust1, frust2, order );
 				break;
 			}
 		}
@@ -1773,8 +1560,7 @@ void Renderer::drawRenderables( const string &shaderContext, int theClass, bool 
 
 
 void Renderer::drawMeshes( uint32 firstItem, uint32 lastItem, const std::string &shaderContext, int theClass,
-                           bool debugView, const Frustum *frust1, const Frustum *frust2, RenderingOrder::List order,
-                           int occSet )
+						   bool debugView, const Frustum *frust1, const Frustum *frust2, RenderingOrder::List order)
 {
 	if( frust1 == 0x0 ) return;
 	
@@ -1785,6 +1571,8 @@ void Renderer::drawMeshes( uint32 firstItem, uint32 lastItem, const std::string 
 	MaterialResource *curMatRes = 0x0;
 
 	DefaultShaderUniforms &uni = Modules::renderer()._uni;
+
+//	std::cout << "drawMeshes ";
 
 	// Loop over mesh queue
 	for( size_t i = firstItem; i <= lastItem; ++i )
@@ -1799,42 +1587,6 @@ void Renderer::drawMeshes( uint32 firstItem, uint32 lastItem, const std::string 
 			continue;
 		
 		bool modelChanged = true;
-		uint32 queryObj = 0;
-
-		// Occlusion culling
-		if( occSet >= 0 )
-		{
-			if( occSet > (int)meshNode->_occQueries.size() - 1 )
-			{
-				meshNode->_occQueries.resize( occSet + 1, 0 );
-				meshNode->_occQueriesLastVisited.resize( occSet + 1, 0 );
-			}
-			if( meshNode->_occQueries[occSet] == 0 )
-			{
-				queryObj = rdi->createOcclusionQuery();
-				meshNode->_occQueries[occSet] = queryObj;
-				meshNode->_occQueriesLastVisited[occSet] = 0;
-			}
-			else
-			{
-				if( meshNode->_occQueriesLastVisited[occSet] != Modules::renderer().getFrameID() )
-				{
-					meshNode->_occQueriesLastVisited[occSet] = Modules::renderer().getFrameID();
-				
-					// Check query result (viewer must be outside of bounding box)
-					if( nearestDistToAABB( frust1->getOrigin(), meshNode->getBBox().min,
-					                       meshNode->getBBox().max ) > 0 &&
-						rdi->getQueryResult( meshNode->_occQueries[occSet] ) < 1 )
-					{
-						Modules::renderer().pushOccProxy( 0, meshNode->getBBox().min, meshNode->getBBox().max,
-						                                  meshNode->_occQueries[occSet] );
-						continue;
-					}
-					else
-						queryObj = meshNode->_occQueries[occSet];
-				}
-			}
-		}
 		
 		// Bind geometry
 		if( curGeoRes != modelNode->getGeometryResource() )
@@ -1867,19 +1619,16 @@ void Renderer::drawMeshes( uint32 firstItem, uint32 lastItem, const std::string 
 			Modules::renderer().setShaderComb( &Modules::renderer()._defColorShader );
 			Modules::renderer().commitGeneralUniforms();
 			
-			uint32 curLod = meshNode->getLodLevel();
-			Vec4f color;
-			if( curLod == 0 ) color = Vec4f( 0.5f, 0.75f, 1, 1 );
-			else if( curLod == 1 ) color = Vec4f( 0.25f, 0.75, 0.75f, 1 );
-			else if( curLod == 2 ) color = Vec4f( 0.25f, 0.75, 0.5f, 1 );
-			else if( curLod == 3 ) color = Vec4f( 0.5f, 0.5f, 0.25f, 1 );
-			else color = Vec4f( 0.75f, 0.5, 0.25f, 1 );
+			Vec4f color = Vec4f( 0.5f, 0.75f, 1, 1 );
 
 			// Darken models with skeleton so that bones are more noticeable
 			if( !modelNode->_jointList.empty() ) color = color * 0.3f;
 
 			rdi->setShaderConst( Modules::renderer()._defColShader_color, CONST_FLOAT4, &color.x );
 		}
+
+		// checked the class just over
+//		std::cout << modelNode->_name << "_" << meshNode->getBatchStart() << " ";
 
 		ShaderCombination *curShader = Modules::renderer().getCurShader();
 		
@@ -1913,8 +1662,7 @@ void Renderer::drawMeshes( uint32 firstItem, uint32 lastItem, const std::string 
 			rdi->setShaderConst( curShader->uniLocs[ uni.worldNormalMat ], CONST_FLOAT33, normalMat );
 		}
 		if( curShader->uniLocs[ uni.nodeId ] >= 0 )
-		{
-			float id = (float)meshNode->getHandle();
+		{			float id = (float)meshNode->getHandle();
 			rdi->setShaderConst( curShader->uniLocs[ uni.nodeId ], CONST_FLOAT, &id );
 		}
 		if( curShader->uniLocs[ uni.customInstData ] >= 0 )
@@ -1922,29 +1670,20 @@ void Renderer::drawMeshes( uint32 firstItem, uint32 lastItem, const std::string 
 			rdi->setShaderConst( curShader->uniLocs[ uni.customInstData ], CONST_FLOAT4,
 			                      &modelNode->_customInstData[0].x, ModelCustomVecCount );
 		}
-
-		if( queryObj )
-			rdi->beginQuery( queryObj );
 		
 		// Render
 		rdi->drawIndexed( meshNode->getPrimType(), meshNode->getBatchStart(), meshNode->getBatchCount(),
 		                  meshNode->getVertRStart(), meshNode->getVertREnd() - meshNode->getVertRStart() + 1 );
 		Modules::stats().incStat( EngineStats::BatchCount, 1 );
 		Modules::stats().incStat( EngineStats::TriCount, meshNode->getBatchCount() / 3.0f );
-
-		if( queryObj )
-			rdi->endQuery( queryObj );
 	}
 
-	// Draw occlusion proxies
-	if( occSet >= 0 )
-		Modules::renderer().drawOccProxies( OCCPROXYLIST_RENDERABLES );
+//	std::cout << std::endl;
 }
 
 
 void Renderer::drawParticles( uint32 firstItem, uint32 lastItem, const std::string &shaderContext, int theClass,
-                              bool debugView, const Frustum *frust1, const Frustum *frust2, RenderingOrder::List order,
-                              int occSet )
+							  bool debugView, const Frustum *frust1, const Frustum *frust2, RenderingOrder::List order)
 {
 	if( frust1 == 0x0 || Modules::renderer().getCurCamera() == 0x0 ) return;
 	if( debugView ) return;  // Don't render particles in debug view
@@ -1971,51 +1710,12 @@ void Renderer::drawParticles( uint32 firstItem, uint32 lastItem, const std::stri
 		if( emitter->_particleCount == 0 ) continue;
 		if( !emitter->_materialRes->isOfClass( theClass ) ) continue;
 		
-		// Occlusion culling
-		uint32 queryObj = 0;
-		if( occSet >= 0 )
-		{
-			if( occSet > (int)emitter->_occQueries.size() - 1 )
-			{
-				emitter->_occQueries.resize( occSet + 1, 0 );
-				emitter->_occQueriesLastVisited.resize( occSet + 1, 0 );
-			}
-			if( emitter->_occQueries[occSet] == 0 )
-			{
-				queryObj = rdi->createOcclusionQuery();
-				emitter->_occQueries[occSet] = queryObj;
-				emitter->_occQueriesLastVisited[occSet] = 0;
-			}
-			else
-			{
-				if( emitter->_occQueriesLastVisited[occSet] != Modules::renderer().getFrameID() )
-				{
-					emitter->_occQueriesLastVisited[occSet] = Modules::renderer().getFrameID();
-				
-					// Check query result (viewer must be outside of bounding box)
-					if( nearestDistToAABB( frust1->getOrigin(), emitter->getBBox().min,
-					                       emitter->getBBox().max ) > 0 &&
-						rdi->getQueryResult( emitter->_occQueries[occSet] ) < 1 )
-					{
-						Modules::renderer().pushOccProxy( 0, emitter->getBBox().min,
-							emitter->getBBox().max, emitter->_occQueries[occSet] );
-						continue;
-					}
-					else
-						queryObj = emitter->_occQueries[occSet];
-				}
-			}
-		}
-		
 		// Set material
 		if( curMatRes != emitter->_materialRes )
 		{
 			if( !Modules::renderer().setMaterial( emitter->_materialRes, shaderContext ) ) continue;
 			curMatRes = emitter->_materialRes;
 		}
-
-		if( queryObj )
-			rdi->beginQuery( queryObj );
 		
 		// Shader uniforms
 		ShaderCombination *curShader = Modules::renderer().getCurShader();
@@ -2090,22 +1790,14 @@ void Renderer::drawParticles( uint32 firstItem, uint32 lastItem, const std::stri
 				Modules::stats().incStat( EngineStats::TriCount, count * 2.0f );
 			}
 		}
-
-		if( queryObj )
-			rdi->endQuery( queryObj );
 	}
 
 	timer->endQuery();
-
-	// Draw occlusion proxies
-	if( occSet >= 0 )
-		Modules::renderer().drawOccProxies( OCCPROXYLIST_RENDERABLES );	
 }
 
 
 void Renderer::drawComputeResults( uint32 firstItem, uint32 lastItem, const std::string &shaderContext, int theClass,
-								   bool debugView, const Frustum *frust1, const Frustum *frust2, RenderingOrder::List order,
-								   int occSet )
+								   bool debugView, const Frustum *frust1, const Frustum *frust2, RenderingOrder::List order )
 {
 	if ( frust1 == 0x0 ) return;
 
@@ -2209,6 +1901,8 @@ void Renderer::drawComputeResults( uint32 firstItem, uint32 lastItem, const std:
 
 void Renderer::render( CameraNode *camNode )
 {
+//	printf("render starts\n");
+
 	_curCamera = camNode;
 	if( _curCamera == 0x0 ) return;
 
@@ -2223,6 +1917,7 @@ void Renderer::render( CameraNode *camNode )
 	_renderDevice->setViewport( _curCamera->_vpX, _curCamera->_vpY, _curCamera->_vpWidth, _curCamera->_vpHeight );
 
 	// Perform culling
+	//
 	prepareRenderViews();
 
 	if( Modules::config().debugViewMode || _curCamera->_pipelineRes == 0x0 )
@@ -2293,8 +1988,9 @@ void Renderer::render( CameraNode *camNode )
 				break;
 
 			case DefaultPipelineCommands::DrawGeometry:
+//				printf("DrawGeometry\n");
 				drawGeometry( pc.params[0].getString(), pc.params[1].getInt(),
-				              (RenderingOrder::List)pc.params[2].getInt(), _curCamera->_occSet );
+							  (RenderingOrder::List)pc.params[2].getInt());
 				break;
 
 			case DefaultPipelineCommands::DrawQuad:
@@ -2303,12 +1999,7 @@ void Renderer::render( CameraNode *camNode )
 
 			case DefaultPipelineCommands::DoForwardLightLoop:
 				drawLightGeometry( pc.params[0].getString(), pc.params[1].getInt(),
-				                   pc.params[2].getBool(), (RenderingOrder::List)pc.params[3].getInt(),
-								   _curCamera->_occSet );
-				break;
-
-			case DefaultPipelineCommands::DoDeferredLightLoop:
-				drawLightShapes( pc.params[0].getString(), pc.params[1].getBool(), _curCamera->_occSet );
+								   pc.params[2].getBool(), (RenderingOrder::List)pc.params[3].getInt() );
 				break;
 
 			case DefaultPipelineCommands::SetUniform:
@@ -2367,7 +2058,7 @@ void Renderer::renderDebugView()
 
 	// Draw renderable nodes as wireframe
 	setupViewMatrices( _curCamera->getViewMat(), _curCamera->getProjMat() );
-	drawRenderables( "", 0, true, &_curCamera->getFrustum(), 0x0, RenderingOrder::None, -1 );
+	drawRenderables( "", 0, true, &_curCamera->getFrustum(), 0x0, RenderingOrder::None );
 
 	// Draw bounding boxes
 	_renderDevice->setCullMode( RS_CULL_NONE );

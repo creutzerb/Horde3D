@@ -346,7 +346,8 @@ struct H3DGeoRes
 		GeoIndexStream,
 		GeoVertPosStream,
 		GeoVertTanStream,
-		GeoVertStaticStream
+		GeoVertStaticStream,
+		GeoVertColorSteam
 	};
 };
 
@@ -613,24 +614,12 @@ struct H3DModel
 
 		GeoResI      - Geometry resource used for the model
 		SWSkinningI  - Enables or disables software skinning (default: 0)
-		LodDist1F    - Distance to camera from which on LOD1 is used (default: infinite)
-		               (must be a positive value larger than 0.0)
-		LodDist2F    - Distance to camera from which on LOD2 is used
-		               (may not be smaller than LodDist1) (default: infinite)
-		LodDist3F    - Distance to camera from which on LOD3 is used
-		               (may not be smaller than LodDist2) (default: infinite)
-		LodDist4F    - Distance to camera from which on LOD4 is used
-		               (may not be smaller than LodDist3) (default: infinite)
 		AnimCountI   - Number of active animation stages [read-only]
 	*/
 	enum List
 	{
 		GeoResI = 200,
 		SWSkinningI,
-		LodDist1F,
-		LodDist2F,
-		LodDist3F,
-		LodDist4F,
 		AnimCountI
 	};
 };
@@ -664,8 +653,6 @@ struct H3DMesh
 		BatchCountI  - Number of triangle indices used for drawing mesh [read-only]
 		VertRStartI  - First vertex in Geometry resource of parent Model node [read-only]
 		VertREndI    - Last vertex in Geometry resource of parent Model node [read-only]
-		LodLevelI    - LOD level of Mesh; the mesh is only rendered if its LOD level corresponds to
-		               the model's current LOD level which is calculated based on the LOD distances (default: 0)
 	*/
 	enum List
 	{
@@ -673,8 +660,7 @@ struct H3DMesh
 		BatchStartI,
 		BatchCountI,
 		VertRStartI,
-		VertREndI,
-		LodLevelI
+		VertREndI
 	};
 };
 
@@ -741,7 +727,6 @@ struct H3DCamera
 		ViewportWidthI   - Width of the viewport rectangle (default: 320)
 		ViewportHeightI  - Height of the viewport rectangle (default: 240)
 		OrthoI           - Flag for setting up an orthographic frustum instead of a perspective one (default: 0)
-		OccCullingI      - Flag for enabling occlusion culling (default: 0)
 	*/
 	enum List
 	{
@@ -758,8 +743,7 @@ struct H3DCamera
 		ViewportYI,
 		ViewportWidthI,
 		ViewportHeightI,
-		OrthoI,
-		OccCullingI
+		OrthoI
 	};
 };
 
@@ -1177,6 +1161,8 @@ H3D_API H3DRes h3dAddResource( int type, const char *name, int flags );
 		handle to the cloned resource or 0 in case of failure
 */
 H3D_API H3DRes h3dCloneResource( H3DRes sourceRes, const char *name );
+
+H3D_API H3DRes h3dCloneResAddVertexColor( H3DRes sourceRes, const char *name );
 
 /* Function: h3dRemoveResource
 		Removes a resource.
@@ -1649,6 +1635,13 @@ H3D_API bool h3dSetNodeParent( H3DNode node, H3DNode parent );
 H3D_API H3DNode h3dGetNodeChild( H3DNode node, int index );
 
 
+H3D_API void* h3dGetModelPointer( H3DNode model);
+
+H3D_API void h3dCustomQueueAdd(int meshIndex);
+H3D_API void h3dCustomQueueClear();
+
+// PLS DON'T LEAK ;) (malloc on meshes_handles)
+H3D_API int h3dGetModelMeshes( H3DNode model, int** meshes_handles);
 
 /* Function: h3dAddNodes
 		Adds nodes from a SceneGraph resource to the scene.
@@ -1989,7 +1982,6 @@ H3D_API void h3dSetNodeUniforms( H3DNode node, const float *uniformData, int cou
 		The function finds intersections relative to the ray origin and returns the number of intersecting scene
 		nodes. The ray is a line segment and is specified by a starting point (the origin) and a finite direction
 		vector which also defines its length. Currently this function is limited to returning intersections with Meshes.
-		For Meshes, the base LOD (LOD0) is always used for performing the ray-triangle intersection tests.
 	
 	Parameters:
 		node        - node at which intersection check is beginning
@@ -2025,22 +2017,17 @@ H3D_API bool h3dGetCastRayResult( int index, H3DNode *node, float *distance, flo
 
 	Details:
 		This function checks if a specified node is visible from the perspective of a specified
-		camera. The function always checks if the node is in the camera's frustum. If checkOcclusion
-		is true, the function will take into account the occlusion culling information from the previous
-		frame (if occlusion culling is disabled the flag is ignored). The flag calcLod determines whether the
-		detail level for the node should be returned in case it is visible. The function returns -1 if the node
-		is not visible, otherwise 0 (base LOD level) or the computed LOD level.
+		camera. The function always checks if the node is in the camera's frustum. The function returns -1 if the node
+		is not visible, otherwise 0.
 
 	Parameters:
 		node            - node to be checked for visibility
 		cameraNode      - camera node from which the visibility test is done
-		checkOcclusion  - specifies if occlusion info from previous frame should be taken into account
-		calcLod         - specifies if LOD level should be computed
 
 	Returns:
-		computed LOD level or -1 if node is not visible
+		0 or -1 if node is not visible
 */
-H3D_API int h3dCheckNodeVisibility( H3DNode node, H3DNode cameraNode, bool checkOcclusion, bool calcLod );
+H3D_API int h3dCheckNodeVisibility( H3DNode node, H3DNode cameraNode);
 
 
 /* Group: Group-specific scene graph functions */
@@ -2076,48 +2063,6 @@ H3D_API H3DNode h3dAddGroupNode( H3DNode parent, const char *name );
 		handle to the created node or 0 in case of failure
 */
 H3D_API H3DNode h3dAddModelNode( H3DNode parent, const char *name, H3DRes geometryRes );
-
-/* Function: h3dInitModularGeo
-		first step to create modular geo
-
-	Details:
-		clone a geo res into a new res - you will add up to it other geores
-
-	Parameters:
-		geometryRes	- first modular geo part - you clone from it
-
-	Returns:
-		uncomplete modular geo resource handle
-*/
-H3D_API H3DRes h3dInitModularGeo( H3DRes geometryRes );
-
-/* Function: h3dAppendModularGeo
-		first step to create modular geo
-
-	Details:
-		clone a geo res into a new res - you will add up to it other geores
-
-	Parameters:
-		geometryRes	- first modular geo part - you clone from it
-
-	Returns:
-		uncomplete modular geo resource handle
-*/
-H3D_API void h3dAppendModularGeo( H3DRes modGeo, H3DRes otherGeo, float* seamx, float* seamy, float* seamz, unsigned int seamCount, bool x_sym);
-
-/* Function: h3dCompleteModularGeo
-		first step to create modular geo
-
-	Details:
-		clone a geo res into a new res - you will add up to it other geores
-
-	Parameters:
-		geometryRes	- first modular geo part - you clone from it
-
-	Returns:
-		uncomplete modular geo resource handle
-*/
-H3D_API void h3dCompleteModularGeo( H3DRes geometryRes );
 
 /* Function: h3dSetupModelAnimStage
 		Configures an animation stage of a Model node.

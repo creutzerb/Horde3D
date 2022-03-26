@@ -38,19 +38,12 @@ LightNode::LightNode( const LightNodeTpl &lightTpl ) :
 
 	_shadowRenderParamsID = -1;
 	_renderViewID = -1;
-	_occlusionCullingSupported = true;
 }
 
 
 LightNode::~LightNode()
 {
-	RenderDeviceInterface *rdi = Modules::renderer().getRenderDevice();
 
-	for( uint32 i = 0; i < _occQueries.size(); ++i )
-	{
-		if( _occQueries[i] != 0 )
-			rdi->destroyQuery( _occQueries[i] );
-	}
 }
 
 

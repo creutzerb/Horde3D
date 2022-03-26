@@ -334,12 +334,6 @@ void RenderDeviceGL4::initRDIFuncs()
 	_delegate_getRenderBufferData.bind< RenderDeviceGL4, &RenderDeviceGL4::getRenderBufferData >( this );
 	_delegate_getRenderBufferDimensions.bind< RenderDeviceGL4, &RenderDeviceGL4::getRenderBufferDimensions >( this );
 
-	_delegate_createOcclusionQuery.bind< RenderDeviceGL4, &RenderDeviceGL4::createOcclusionQuery >( this );
-	_delegate_destroyQuery.bind< RenderDeviceGL4, &RenderDeviceGL4::destroyQuery >( this );
-	_delegate_beginQuery.bind< RenderDeviceGL4, &RenderDeviceGL4::beginQuery >( this );
-	_delegate_endQuery.bind< RenderDeviceGL4, &RenderDeviceGL4::endQuery >( this );
-	_delegate_getQueryResult.bind< RenderDeviceGL4, &RenderDeviceGL4::getQueryResult >( this );
-
 	_delegate_createGPUTimer.bind< RenderDeviceGL4, &RenderDeviceGL4::createGPUTimer >( this );
 	_delegate_commitStates.bind< RenderDeviceGL4, &RenderDeviceGL4::commitStates >( this );
 	_delegate_resetStates.bind< RenderDeviceGL4, &RenderDeviceGL4::resetStates >( this );
@@ -1850,47 +1844,6 @@ bool RenderDeviceGL4::getRenderBufferData( uint32 rbObj, int bufIndex, int *widt
 
 	return retVal;
 }
-
-
-// =================================================================================================
-// Queries
-// =================================================================================================
-
-uint32 RenderDeviceGL4::createOcclusionQuery()
-{
-	uint32 queryObj;
-	glGenQueries( 1, &queryObj );
-	return queryObj;
-}
-
-
-void RenderDeviceGL4::destroyQuery( uint32 queryObj )
-{
-	if( queryObj == 0 ) return;
-	
-	glDeleteQueries( 1, &queryObj );
-}
-
-
-void RenderDeviceGL4::beginQuery( uint32 queryObj )
-{
-	glBeginQuery( GL_SAMPLES_PASSED, queryObj );
-}
-
-
-void RenderDeviceGL4::endQuery( uint32 /*queryObj*/ )
-{
-	glEndQuery( GL_SAMPLES_PASSED );
-}
-
-
-uint32 RenderDeviceGL4::getQueryResult( uint32 queryObj )
-{
-	uint32 samples = 0;
-	glGetQueryObjectuiv( queryObj, GL_QUERY_RESULT, &samples );
-	return samples;
-}
-
 
 // =================================================================================================
 // Internal state management

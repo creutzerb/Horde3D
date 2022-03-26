@@ -299,7 +299,6 @@ EmitterNode::EmitterNode( const EmitterNodeTpl &emitterTpl ) :
 	SceneNode( emitterTpl )
 {
 	_renderable = true;
-	_occlusionCullingSupported = true;
 
 	_materialRes = emitterTpl.matRes;
 	_effectRes = emitterTpl.effectRes;
@@ -324,14 +323,6 @@ EmitterNode::EmitterNode( const EmitterNodeTpl &emitterTpl ) :
 
 EmitterNode::~EmitterNode()
 {
-	RenderDeviceInterface *rdi = Modules::renderer().getRenderDevice();
-
-	for( uint32 i = 0; i < _occQueries.size(); ++i )
-	{
-		if( _occQueries[i] != 0 )
-			rdi->destroyQuery( _occQueries[i] );
-	}
-	
 	delete[] _particles;
 	delete[] _parPositions;
 	delete[] _parSizesANDRotations;

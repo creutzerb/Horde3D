@@ -5,6 +5,11 @@ project(Horde3D)
 
 set(CMAKE_CXX_STANDARD 11)
 
+find_program(CCACHE_PROGRAM ccache)
+if(CCACHE_PROGRAM)
+    set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_PROGRAM}")
+endif()
+
 SET(${PROJECT_NAME}_MAJOR_VERSION 2)
 SET(${PROJECT_NAME}_MINOR_VERSION 0)
 SET(${PROJECT_NAME}_PATCH_LEVEL 0)
@@ -17,7 +22,7 @@ include(CheckFunctionExists)
 check_function_exists(strncpy_s HAVE_STRNCPY_S)
 
 # To build or not to build examples (removes GLFW or SDL dependency)
-option(HORDE3D_BUILD_EXAMPLES "Builds Horde3D examples" ON)
+option(HORDE3D_BUILD_EXAMPLES "Builds Horde3D examples" OFF)
 
 # Check the required windowing backend
 if(HORDE3D_BUILD_EXAMPLES)
@@ -69,7 +74,7 @@ else()
 endif(HORDE3D_BUILD_EXAMPLES)
 
 # Render backend selection
-option(HORDE3D_USE_GL2 "Add OpenGL 2 render backend. Turns off ES3 render backend." ON)
+option(HORDE3D_USE_GL2 "Add OpenGL 2 render backend. Turns off ES3 render backend." OFF)
 option(HORDE3D_USE_GL4 "Add OpenGL 4 render backend. Turns off ES3 render backend." ON)
 option(HORDE3D_USE_GLES3 "Add OpenGL ES 3 render backend. Turns off desktop GL backends." OFF)
 
@@ -155,11 +160,6 @@ include(Extensions/Extensions.txt)
 
 # Add engine target.
 add_subdirectory(Horde3D)
-
-option(HORDE3D_BUILD_EDITOR "Build Horde3D Editor" OFF)
-if(HORDE3D_BUILD_EDITOR)
-  add_subdirectory(Horde3DEditor)
-endif(HORDE3D_BUILD_EDITOR)
 
 if(POLICY CMP0058)
     cmake_policy(SET CMP0058 NEW)

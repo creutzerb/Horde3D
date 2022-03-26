@@ -36,7 +36,8 @@ struct GeometryResData
 		GeoIndexStream,
 		GeoVertPosStream,
 		GeoVertTanStream,
-		GeoVertStaticStream
+		GeoVertStaticStream,
+		GeoVertColorSteam
 	};
 };
 
@@ -91,10 +92,7 @@ public:
 	GeometryResource( const std::string &name, int flags );
 	~GeometryResource();
 	Resource *clone();
-
-	GeometryResource *initModularGeo();
-	void appendModularGeo(GeometryResource *other_res, float *seamx, float *seamy, float *seamz, uint seamCount, bool x_sym);
-	void completeModularGeo();
+	Resource *vertColorClone();
 	
 	void initDefault();
 	void release();
@@ -128,7 +126,7 @@ private:
 private:
 	static int                  mappedWriteStream;
 	
-	uint32                      _indexBuf, _posVBuf, _tanVBuf, _staticVBuf;
+	uint32                      _indexBuf, _posVBuf, _tanVBuf, _staticVBuf, _colorVBuf;
 	uint32						_geoObj;
 
 	uint32                      _indexCount, _vertCount;
@@ -137,6 +135,7 @@ private:
 	Vec3f                       *_vertPosData;
 	VertexDataTan               *_vertTanData;
 	VertexDataStatic            *_vertStaticData;
+	Vec4f						*_vertColorData;
 	
 	std::vector< Joint >        _joints;
 	BoundingBox                 _skelAABB;

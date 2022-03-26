@@ -67,6 +67,7 @@ public:
 	Resource( int type, const std::string &name, int flags );
 	virtual ~Resource();
 	virtual Resource *clone();  // TODO: Implement this for all resource types
+	virtual Resource *vertColorClone();  // TODO: Implement this for all resource types
 	
 	virtual void initDefault();
 	virtual void release();
@@ -173,6 +174,7 @@ public:
 	ResHandle addResource( int type, const std::string &name, int flags, bool userCall );
 	ResHandle addNonExistingResource( Resource &resource, bool userCall );
 	ResHandle cloneResource( Resource &sourceRes, const std::string &name );
+	ResHandle cloneResourceAddVertColor( Resource &sourceRes, const std::string &name );
 	int removeResource( Resource &resource, bool userCall );
 	void clear();
 	ResHandle queryUnloadedResource( int index ) const;
@@ -183,7 +185,7 @@ public:
 
 	std::vector < Resource * > &getResources() { return _resources; }
 
-//protected:
+protected:
 	ResHandle addResource( Resource &res );
 
 protected:

@@ -89,13 +89,11 @@ struct SceneNode
 struct Mesh : public SceneNode
 {
 	std::vector< TriGroup* > triGroups;
-	unsigned int             lodLevel;
 	
 	Mesh()
 	{
 		typeJoint = false;
 		parent = 0x0;
-		lodLevel = 0;
 	}
 
 	~Mesh() { for( int i = triGroups.size(); i>0; ) delete triGroups[--i];  }
@@ -143,7 +141,7 @@ struct MorphTarget
 class Converter
 {
 public:
-	Converter( ColladaDocument &doc, const std::string &outPath, const float *lodDists );
+	Converter(ColladaDocument &doc, const std::string &outPath);
 	~Converter();
 	
 	bool convertModel( bool optimize );
@@ -179,9 +177,7 @@ private:
 	std::vector< SceneNode* >    _nodes;
 
 	std::string                  _outPath;
-	float                        _lodDist1, _lodDist2, _lodDist3, _lodDist4;
 	unsigned int                 _frameCount;
-	unsigned int                 _maxLodLevel;
 	bool                         _animNotSampled;
 };
 

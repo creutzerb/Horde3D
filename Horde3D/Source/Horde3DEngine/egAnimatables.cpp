@@ -34,11 +34,9 @@ MeshNode::MeshNode( const MeshNodeTpl &meshTpl ) :
 	_materialRes( meshTpl.matRes ), _primType( rdiPrimitiveTypes[ meshTpl.primType ] ),
 	_batchStart( meshTpl.batchStart ), _batchCount( meshTpl.batchCount ),
 	_vertRStart( meshTpl.vertRStart ), _vertREnd( meshTpl.vertREnd ),
-	_lodLevel(meshTpl.lodLevel), _parentModel(0x0) 
+	_parentModel(0x0)
 {
 	_renderable = true;
-	_lodSupported = true;
-	_occlusionCullingSupported = true;
 
 	if( _materialRes != 0x0 )
 		_sortKey = (float)_materialRes->getHandle();
@@ -47,14 +45,7 @@ MeshNode::MeshNode( const MeshNodeTpl &meshTpl ) :
 
 MeshNode::~MeshNode()
 {
-	RenderDeviceInterface *rdi = Modules::renderer().getRenderDevice();
-
 	_materialRes = 0x0;
-	for( uint32 i = 0; i < _occQueries.size(); ++i )
-	{
-		if( _occQueries[i] != 0 )
-			rdi->destroyQuery( _occQueries[i] );
-	}
 }
 
 
@@ -85,9 +76,6 @@ SceneNodeTpl *MeshNode::parsingFunc( map< string, string > &attribs )
 	itr = attribs.find( "vertREnd" );
 	if( itr != attribs.end() ) meshTpl->vertREnd = atoi( itr->second.c_str() );
 	else result = false;
-
-	itr = attribs.find( "lodLevel" );
-	if( itr != attribs.end() ) meshTpl->lodLevel = atoi( itr->second.c_str() );
 
 	itr = attribs.find( "primType" );
 	if( itr != attribs.end() ) {
@@ -157,8 +145,6 @@ int MeshNode::getParamI( int param ) const
 		return _vertRStart;
 	case MeshNodeParams::VertREndI:
 		return _vertREnd;
-	case MeshNodeParams::LodLevelI:
-		return _lodLevel;
 	}
 
 	return SceneNode::getParamI( param );
@@ -183,9 +169,6 @@ void MeshNode::setParamI( int param, int value )
 			Modules::setError( "Invalid handle in h3dSetNodeParamI for H3DMesh::MatResI" );
 		}
 		return;
-	case MeshNodeParams::LodLevelI:
-		_lodLevel = value;
-		return;
 	}
 
 	SceneNode::setParamI( param, value );
@@ -194,9 +177,6 @@ void MeshNode::setParamI( int param, int value )
 
 bool MeshNode::checkIntersection( const Vec3f &rayOrig, const Vec3f &rayDir, Vec3f &intsPos ) const
 {
-	// Collision check is only done for base LOD
-	if( _lodLevel != 0 ) return false;
-
 	if( !rayAABBIntersection( rayOrig, rayDir, _bBox.min, _bBox.max ) ) return false;
 	
 	GeometryResource *geoRes = _parentModel->getGeometryResource();
@@ -240,19 +220,6 @@ bool MeshNode::checkIntersection( const Vec3f &rayOrig, const Vec3f &rayDir, Vec
 	
 	return intersection;
 }
-
-
-uint32 MeshNode::calcLodLevel( const Vec3f &viewPoint ) const
-{
-	return _parentModel->calcLodLevel( viewPoint );
-}
-
-
-bool MeshNode::checkLodCorrectness( uint32 lodLevel ) const
-{
-	return _lodLevel == lodLevel;
-}
-
 
 void MeshNode::onAttach( SceneNode &parentNode )
 {

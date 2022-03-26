@@ -114,14 +114,6 @@ public:
 	virtual const char *getParamStr( int param ) const;
 	virtual void setParamStr( int param, const char* value );
 
-	virtual uint32 calcLodLevel( const Vec3f &viewPoint ) const;
-	virtual bool checkLodCorrectness( uint32 lodLevel ) const;
-
-	bool checkOcclusionSupported() { return _occlusionCullingSupported; }
-	uint32 getOcclusionResult( uint32 occlusionSet );
-
-	bool checkLodSupport() { return _lodSupported; }
-
 	virtual bool canAttach( SceneNode &parent ) const;
 	void markDirty();
 	void updateTree();
@@ -131,6 +123,7 @@ public:
 
 	int getType() const { return _type; };
 	NodeHandle getHandle() const { return _handle; }
+	NodeHandle getSgHandle() const { return _sgHandle; }
 	SceneNode *getParent() const { return _parent; }
 	const std::string getName() const { return _name; }
 	std::vector< SceneNode * > &getChildren() { return _children; }
@@ -170,8 +163,6 @@ protected:
 	bool                        _dirty;  // Does the node need to be updated?
 	bool                        _transformed;
 	bool                        _renderable;
-	bool						_lodSupported;
-	bool						_occlusionCullingSupported;
 
 	friend class SceneManager;
 	friend class SpatialGraph;
@@ -271,7 +262,7 @@ public:
 	virtual void updateQueues( const Frustum &frustum1, const Frustum *frustum2,
 	                   RenderingOrder::List order, uint32 filterIgnore, bool lightQueue, bool renderQueue );
 
-	virtual void updateQueues( uint32 filterIgnore, bool forceUpdateAllViews = false, bool preparingViews = false );
+	virtual void updateQueues( uint32 filterIgnore, bool forceUpdateAllViews = false );
 
 	// Render view handling
 	void clearViews();
@@ -286,6 +277,7 @@ public:
 
 	std::vector< SceneNode * > &getLightQueue() { return _lightQueue; }
 	RenderQueue &getRenderQueue();
+	std::vector< int >			   _customQueue;
 protected:
 	std::vector< SceneNode * >     _nodes;		// Renderable nodes and lights
 	std::vector< uint32 >          _freeList;
@@ -342,6 +334,9 @@ public:
 	NodeHandle addNodes( SceneNode &parent, SceneGraphResource &sgRes );
 	void removeNode( SceneNode &node );
 	bool relocateNode( SceneNode &node, SceneNode &parent );
+
+	void customQueueAdd(int mesh);
+	void customQueueClear();
 	
 	int findNodes( SceneNode &startNode, const std::string &name, int type );
 	void clearFindResults() { _findResults.resize( 0 ); }
@@ -350,7 +345,7 @@ public:
 	int castRay( SceneNode &node, const Vec3f &rayOrig, const Vec3f &rayDir, int numNearest );
 	bool getCastRayResult( int index, CastRayResult &crr );
 
-	int checkNodeVisibility( SceneNode &node, CameraNode &cam, bool checkOcclusion, bool calcLod );
+	int checkNodeVisibility(SceneNode &node, CameraNode &cam);
 
 	SceneNode &getRootNode() const { return *_nodes[0]; }
 	SceneNode &getDefCamNode() const { return *_nodes[1]; }
@@ -363,25 +358,7 @@ public:
 	//
 	void updateSpatialNode( uint32 sgHandle ) { _spatialGraph->updateNode( sgHandle ); }
 
-	/* Function: updateQueues
-			Updates internal queues of the spatial graph.
-		
-		Details:
-			This function updates spatial nodes registered in the graph. It performs scene graph update,
-			if required, but its main purpose is to perform culling for registered render views and
-			generate render queues.
-		
-		Parameters:
-			filterIgnore - allows filtering nodes that have the provided flags (see SceneNodeFlags).
-			forceUpdateAllViews - allows forcing full update for all render views, will perform culling
-								  for all objects and render views again (default:false).
-			preparingViews - is updateQueues called from prepareRenderViews function. If yes, additional
-							 root node update is not called (default:false)
-			
-		Returns:
-			nothing
-	*/
-	void updateQueues( uint32 filterIgnore, bool forceUpdateAllViews = false, bool preparingViews = false );
+	void updateQueues( uint32 filterIgnore, bool forceUpdateAllViews = false );
 	void updateQueues( const Frustum &frustum1, const Frustum *frustum2,
 		RenderingOrder::List order, uint32 filterIgnore, bool lightQueue, bool renderableQueue );
 

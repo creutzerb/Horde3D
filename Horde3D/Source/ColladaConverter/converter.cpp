@@ -48,18 +48,12 @@ inline void fwrite_le(const T* data, size_t count, FILE* f)
     }
 }
 
-Converter::Converter( ColladaDocument &doc, const string &outPath, const float *lodDists ) :
+Converter::Converter( ColladaDocument &doc, const string &outPath) :
 	_daeDoc( doc )
 {
 	_outPath = outPath;
 	
-	_lodDist1 = lodDists[0];
-	_lodDist2 = lodDists[1];
-	_lodDist3 = lodDists[2];
-	_lodDist4 = lodDists[3];
-	
 	_frameCount = 0;
-	_maxLodLevel = 0;
 	_animNotSampled = false;
 }
 
@@ -478,22 +472,6 @@ void Converter::processMeshes( bool optimize )
 	// Note: At the moment the geometry for all nodes is copied and not referenced
 	for( unsigned int i = 0; i < _meshes.size(); ++i )
 	{
-		// Interpret mesh LOD level
-		if( strstr( _meshes[i]->name, "_lod1" ) == _meshes[i]->name + strlen( _meshes[i]->name ) - 5 )
-			_meshes[i]->lodLevel = 1;
-		else if( strstr( _meshes[i]->name, "_lod2" ) == _meshes[i]->name + strlen( _meshes[i]->name ) - 5 )
-			_meshes[i]->lodLevel = 2;
-		else if( strstr( _meshes[i]->name, "_lod3" ) == _meshes[i]->name + strlen( _meshes[i]->name ) - 5 )
-			_meshes[i]->lodLevel = 3;
-		else if( strstr( _meshes[i]->name, "_lod4" ) == _meshes[i]->name + strlen( _meshes[i]->name ) - 5 )
-			_meshes[i]->lodLevel = 4;
-		
-		if( _meshes[i]->lodLevel > 0 )
-		{
-			if( _meshes[i]->lodLevel > _maxLodLevel ) _maxLodLevel = _meshes[i]->lodLevel;
-			_meshes[i]->name[strlen( _meshes[i]->name ) - 5] = '\0';  // Cut off lod postfix from name
-		}
-		
 		// Find geometry/controller for node
 		string id = _meshes[i]->daeInstance->url;
 		
@@ -1139,7 +1117,6 @@ void Converter::writeSGNode( const string &assetPath, const string &modelName, S
 			if( i > 0 ) outf << "\t";
 			outf << "<Mesh ";
 			outf << "name=\"" << (i > 0 ? "#" : "") << mesh->name << "\" ";
-			if( mesh->lodLevel > 0 ) outf << "lodLevel=\"" << mesh->lodLevel << "\" ";
 			outf << "material=\"";
 			outf << assetPath + modelName + mesh->triGroups[i]->matName + ".material.xml\" ";
 			
@@ -1220,10 +1197,6 @@ bool Converter::writeSceneGraph( const string &assetPath, const string &assetNam
 	}
 	
 	outf << "<Model name=\"" << assetName << "\" geometry=\"" << assetPath << assetName << ".geo\"";
-	if( _maxLodLevel >= 1 ) outf << " lodDist1=\"" << _lodDist1 << "\"";
-	if( _maxLodLevel >= 2 ) outf << " lodDist2=\"" << _lodDist2 << "\"";
-	if( _maxLodLevel >= 3 ) outf << " lodDist3=\"" << _lodDist3 << "\"";
-	if( _maxLodLevel >= 4 ) outf << " lodDist4=\"" << _lodDist4 << "\"";
 	outf << ">\n";
 
 	// Output morph target names as comment

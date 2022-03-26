@@ -251,13 +251,6 @@ public:
 	                          int *compCount, void *dataBuffer, int bufferSize );
 	void getRenderBufferDimensions( uint32 rbObj, int *width, int *height );
 
-	// Queries
-	uint32 createOcclusionQuery();
-	void destroyQuery( uint32 queryObj );
-	void beginQuery( uint32 queryObj );
-	void endQuery( uint32 queryObj );
-	uint32 getQueryResult( uint32 queryObj );
-
 	// Render Device dependent GPU Timer
 	GPUTimer *createGPUTimer()
 	{

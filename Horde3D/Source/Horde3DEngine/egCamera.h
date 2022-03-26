@@ -59,15 +59,13 @@ struct CameraNodeTpl : public SceneNodeTpl
 	float               nearPlane, farPlane;
 	int                 outputBufferIndex;
 	bool                orthographic;
-	bool                occlusionCulling;
 
 	CameraNodeTpl( const std::string &name, PipelineResource *pipelineRes ) :
 		SceneNodeTpl( SceneNodeTypes::Camera, name ), pipeRes( pipelineRes ),
 		outputTex( 0x0 ),
 		// Default params: fov=45, aspect=4/3
 		leftPlane( -0.055228457f ), rightPlane( 0.055228457f ), bottomPlane( -0.041421354f ),
-		topPlane( 0.041421354f ), nearPlane( 0.1f ), farPlane( 1000.0f ), outputBufferIndex( 0 ),
-		orthographic( false ), occlusionCulling( false )
+		topPlane( 0.041421354f ), nearPlane( 0.1f ), farPlane( 1000.0f ), outputBufferIndex( 0 )
 	{
 	}
 };
@@ -114,7 +112,6 @@ private:
 	float               _frustLeft, _frustRight, _frustBottom, _frustTop;
 	float               _frustNear, _frustFar;
 	int                 _outputBufferIndex;
-	int                 _occSet;
 	bool                _orthographic;  // Perspective or orthographic frustum?
 	bool                _manualProjMat; // Projection matrix manually set?
 

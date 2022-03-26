@@ -47,8 +47,7 @@ struct MeshNodeParams
 		BatchStartI,
 		BatchCountI,
 		VertRStartI,
-		VertREndI,
-		LodLevelI
+		VertREndI
 	};
 };
 
@@ -60,14 +59,12 @@ struct MeshNodeTpl : public SceneNodeTpl
 	MeshPrimType::List primType;
 	uint32             batchStart, batchCount;
 	uint32             vertRStart, vertREnd;
-	uint32             lodLevel;
 
 	MeshNodeTpl( const std::string &name, MaterialResource *materialRes, MeshPrimType::List primType,
 	             uint32 batchStart, uint32 batchCount, uint32 vertRStart, uint32 vertREnd ) :
 		SceneNodeTpl( SceneNodeTypes::Mesh, name ), matRes( materialRes ), 
 		primType(primType), batchStart( batchStart ), 
-		batchCount( batchCount ), vertRStart( vertRStart ), vertREnd( vertREnd ), 
-		lodLevel( 0 )
+		batchCount( batchCount ), vertRStart( vertRStart ), vertREnd( vertREnd )
 	{
 	}
 };
@@ -89,9 +86,6 @@ public:
 	int getParamI( int param ) const;
 	void setParamI( int param, int value );
 	bool checkIntersection( const Vec3f &rayOrig, const Vec3f &rayDir, Vec3f &intsPos ) const;
-	
-	uint32 calcLodLevel( const Vec3f &viewPoint ) const;
-	bool checkLodCorrectness( uint32 lodLevel ) const;
 
 	void onAttach( SceneNode &parentNode );
 	void onDetach( SceneNode &parentNode );
@@ -103,7 +97,6 @@ public:
 	uint32 getBatchCount() const { return _batchCount; }
 	uint32 getVertRStart() const { return _vertRStart; }
 	uint32 getVertREnd() const { return _vertREnd; }
-	uint32 getLodLevel() const { return _lodLevel; }
 	ModelNode *getParentModel() const { return _parentModel; }
 
 protected:
@@ -115,7 +108,6 @@ protected:
 	RDIPrimType         _primType;
 	uint32              _batchStart, _batchCount;
 	uint32              _vertRStart, _vertREnd;
-	uint32              _lodLevel;
 	
 	ModelNode           *_parentModel;
 	BoundingBox         _localBBox;
