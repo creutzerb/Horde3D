@@ -135,7 +135,7 @@ private:
 	Vec3f                       *_vertPosData;
 	VertexDataTan               *_vertTanData;
 	VertexDataStatic            *_vertStaticData;
-	Vec4f						*_vertColorData;
+        Vec4f			    *_vertColorData;
 	
 	std::vector< Joint >        _joints;
 	BoundingBox                 _skelAABB;

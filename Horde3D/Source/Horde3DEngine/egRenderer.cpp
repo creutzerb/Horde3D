@@ -1279,6 +1279,9 @@ void Renderer::updateShadowMap()
 
 	_renderDevice->setColorWriteMask( false );
 	_renderDevice->setDepthMask( true );
+
+	// clear static map ?
+	// clear dynamic map ?
 	_renderDevice->clear( CLR_DEPTH, 0x0, 1.f );
 
 	// ********************************************************************************************
