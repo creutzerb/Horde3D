@@ -233,7 +233,8 @@ struct RenderView
 	BoundingBox		objectsAABB;
 	BoundingBox		auxObjectsAABB; // auxiliary aabb, for objects that passed additional filtering.
 									// Currently used for light types, ignores objects with NoCastShadow flag
-	RenderQueue		objects;
+	RenderQueue		objects_static;
+	RenderQueue		objects_dynami;
 
 	RenderViewType	type;
 	int				linkedView;
@@ -276,7 +277,7 @@ public:
 	std::vector< RenderView > &getRenderViews() { return _views; }
 
 	std::vector< SceneNode * > &getLightQueue() { return _lightQueue; }
-	RenderQueue &getRenderQueue();
+	RenderQueue &getRenderQueue(bool staticObjs);
 	std::vector< int >			   _customQueue;
 protected:
 	std::vector< SceneNode * >     _nodes;		// Renderable nodes and lights
@@ -372,7 +373,7 @@ public:
 
 	void setCurrentView( int viewID );
 	std::vector< SceneNode * > &getLightQueue() const { return _spatialGraph->getLightQueue(); }
-	RenderQueue &getRenderQueue() const { return _spatialGraph->getRenderQueue(); }
+	RenderQueue &getRenderQueue(bool staticObjs) const { return _spatialGraph->getRenderQueue(staticObjs); }
 
 protected:
 	NodeHandle parseNode( SceneNodeTpl &tpl, SceneNode *parent );

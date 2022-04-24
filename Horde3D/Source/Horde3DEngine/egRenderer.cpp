@@ -572,7 +572,8 @@ void Renderer::prepareRenderViews()
 
 		// Ignore lights that do not cross the camera frustum and are disabled
 		LightNode *light = ( LightNode * ) node;
-		if ( _curCamera->getFrustum().cullFrustum( light->getFrustum() ) || light->_flags & SceneNodeFlags::NoDraw ) continue;
+		if ( light->_name!="SUN" && (
+				  _curCamera->getFrustum().cullFrustum( light->getFrustum() ) || light->_flags & SceneNodeFlags::NoDraw )) continue;
 
 		// Light is in current camera view, so add it as a render view 
 		// Light's view should be culled with the camera frustum, so link the camera view
@@ -1040,6 +1041,7 @@ void Renderer::setupShadowMap( bool noShadows )
 	if( !noShadows && _curLight->_shadowMapCount > 0 )
 	{
 		_renderDevice->setTexture( 12, _renderDevice->getRenderBufferTex( _shadowRB, 32 ), sampState, TextureUsage::Texture );
+//		_renderDevice->setTexture( 12, _curLight->_staticTexture, sampState, TextureUsage::Texture );// light shadowmap texture instead
 		_smSize = (float)Modules::config().shadowMapSize;
 	}
 	else
@@ -1060,7 +1062,7 @@ Matrix4f Renderer::calcCropMatrix( int renderView, const LightNode *light, const
 	float frustMaxZ = -Math::MaxFloat, bbMaxZ = -Math::MaxFloat;
 
 	auto &views = Modules::sceneMan().getRenderViews();
-	RenderQueue &renderQueue = views[ renderView ].objects;
+	RenderQueue &renderQueue = views[ renderView ].objects_static;
 	Frustum &frustSlice = views[ renderView ].frustum;
 	Vec3f lightPos = light->_absPos;
 
@@ -1144,7 +1146,7 @@ Matrix4f Renderer::calcCropMatrix( int renderView, const LightNode *light, const
 }
 
 
-int Renderer::prepareCropFrustum( const LightNode *light, const BoundingBox &viewBB )
+int Renderer::prepareCropFrustum(LightNode *light, const BoundingBox &viewBB )
 {
 	if ( !light )
 	{
@@ -1208,13 +1210,16 @@ int Renderer::prepareCropFrustum( const LightNode *light, const BoundingBox &vie
 		// Get light projection matrix
 		float ymax = _curCamera->_frustNear * tanf( degToRad( light->_fov / 2 ) );
 		float xmax = ymax * 1.0f;  // ymax * aspect
-//		params.lightProjMatrix[ i ] = Matrix4f::PerspectiveMat(
-//			-xmax, xmax, -ymax, ymax, _curCamera->_frustNear, light->_radius );
 
-		// default ortho matrix is VERY small
-		const float mult = 200.f;
-		params.lightProjMatrix[ i ] = Matrix4f::OrthoMat(
-			-xmax * mult, xmax * mult, -ymax * mult, ymax * mult, _curCamera->_frustNear, light->_radius );
+		if (light->_name == "SUN"){
+			// default ortho matrix is VERY small
+			const float mult = 3000.f;
+			light->_lightProjMatrix[i] = Matrix4f::OrthoMat(
+						-xmax * mult, xmax * mult, -ymax * mult, ymax * mult, _curCamera->_frustNear, light->_radius );
+		}else{
+			light->_lightProjMatrix[i] = Matrix4f::PerspectiveMat(
+				-xmax, xmax, -ymax, ymax, _curCamera->_frustNear, light->_radius );
+		}
 
 		// Create and store view and other shadow parameters
 		Modules::sceneMan().addRenderView( RenderViewType::Shadow, ( SceneNode * ) light, frustum, /*linkedLightView*/ -1 );
@@ -1227,7 +1232,7 @@ int Renderer::prepareCropFrustum( const LightNode *light, const BoundingBox &vie
 }
 
 
-bool Renderer::prepareShadowMapFrustum( const LightNode *light, int shadowView )
+bool Renderer::prepareShadowMapFrustum( LightNode *light, int shadowView )
 {
 	if ( !light )
 	{
@@ -1241,19 +1246,21 @@ bool Renderer::prepareShadowMapFrustum( const LightNode *light, int shadowView )
 	Frustum frustum;
 	for ( uint32 i = 0; i < light->_shadowMapCount; ++i )
 	{
-		// Build optimized light projection matrix
-		Matrix4f lightProjMat = params.lightProjMatrix[ i ];
-		Matrix4f lightViewProjMat = lightProjMat * light->getViewMat();
+//		if (light->_needShadowUpdate){
+//			// Build optimized light projection matrix
+//			Matrix4f lightProjMat = light->_lightProjMatrix[i];
+//			Matrix4f lightViewProjMat = lightProjMat * light->getViewMat();
 
-		// We have to send corresponding shadow view id in order to calculate crop matrix, 
-		// and only id of the first one is sent to this function, therefore shadow map iterator is needed   
-		lightProjMat = calcCropMatrix( shadowView + i, light, lightViewProjMat ) * lightProjMat;
+//			// We have to send corresponding shadow view id in order to calculate crop matrix,
+//			// and only id of the first one is sent to this function, therefore shadow map iterator is needed
+//			lightProjMat = calcCropMatrix( shadowView + i, light, lightViewProjMat ) * lightProjMat;
 
-		// Generate final frustum with shadow casters for current slice
-		frustum.buildViewFrustum( light->getViewMat(), lightProjMat );
-		
-		params.lightMats[ i ] = lightProjMat * light->getViewMat();
-		params.lightProjMatrix[ i ] = lightProjMat;
+//			// Generate final frustum with shadow casters for current slice
+//			frustum.buildViewFrustum( light->getViewMat(), lightProjMat );
+
+//			params.lightMats[ i ] = lightProjMat * light->getViewMat();
+//			light->_lightProjMatrix[i] = lightProjMat;
+//		}
 
 		// Create and store view and other shadow parameters
 		int view = Modules::sceneMan().addRenderView( RenderViewType::Shadow, (SceneNode *) light, frustum, /*linkedLightView*/ -1 );
@@ -1264,7 +1271,7 @@ bool Renderer::prepareShadowMapFrustum( const LightNode *light, int shadowView )
 }
 
 
-void Renderer::updateShadowMap()
+void Renderer::updateShadowMapStatic()
 {
 	if ( _curLight == 0x0 || _curLight->_shadowRenderParamsID == -1 ) return;
 
@@ -1275,13 +1282,23 @@ void Renderer::updateShadowMap()
 	_renderDevice->getRenderBufferDimensions( _shadowRB, &shadowRTWidth, &shadowRTHeight );
 
 	_renderDevice->setViewport( 0, 0, shadowRTWidth, shadowRTHeight );
+
+	// each light has it's own texture
+	if (_curLight->_staticTexture == 0){
+		// if this light doesn't have it's own texture yet : create one
+		_curLight->_staticTexture = _renderDevice->createTexture(
+					TextureTypes::Tex2D, shadowRTWidth, shadowRTHeight, 1, TextureFormats::DEPTH, 0, false, false, false );
+	}
+	// store _shadowRB personal shadow texture -> the one created with the RB, that we use for the dynamic stuff
+	uint32 shadowMapTex = _renderDevice->getRenderBufferTex( _shadowRB, 32 );
+	_renderDevice->setRenderBufferTex(_shadowRB, _curLight->_staticTexture);
+
 	_renderDevice->setRenderBuffer( _shadowRB );
+
+	printf("render textures in : %i %i %i\n", shadowMapTex, _curLight->_staticTexture, _renderDevice->getRenderBufferTex( _shadowRB, 32 ));
 
 	_renderDevice->setColorWriteMask( false );
 	_renderDevice->setDepthMask( true );
-
-	// clear static map ?
-	// clear dynamic map ?
 	_renderDevice->clear( CLR_DEPTH, 0x0, 1.f );
 
 	// ********************************************************************************************
@@ -1302,40 +1319,88 @@ void Renderer::updateShadowMap()
 	for ( uint32 i = 0; i < numMaps; ++i )
 	{
 		// Create texture atlas if several splits are enabled
-		if ( numMaps > 1 )
-		{
-			const int hsm = Modules::config().shadowMapSize / 2;
-			const int scissorXY[ 8 ] = { 0, 0,  hsm, 0,  hsm, hsm,  0, hsm };
-			const float transXY[ 8 ] = { -0.5f, -0.5f,  0.5f, -0.5f,  0.5f, 0.5f,  -0.5f, 0.5f };
+		//		if ( numMaps > 1 )...
 
-			_renderDevice->setScissorTest( true );
 
-			// Select quadrant of shadow map
-			params.lightProjMatrix[ i ].scale( 0.5f, 0.5f, 1.0f );
-			params.lightProjMatrix[ i ].translate( transXY[ i * 2 ], transXY[ i * 2 + 1 ], 0.0f );
-			_renderDevice->setScissorRect( scissorXY[ i * 2 ], scissorXY[ i * 2 + 1 ], hsm, hsm );
-		}
-
-		_lightMats[ i ] = params.lightProjMatrix[ i ] * _curLight->getViewMat();
-		setupViewMatrices( _curLight->getViewMat(), params.lightProjMatrix[ i ] );
+		_lightMats[ i ] = _curLight->_lightProjMatrix[i] * _curLight->getViewMat();
+		setupViewMatrices( _curLight->getViewMat(), _curLight->_lightProjMatrix[i] );
 
 		// Render
 		Modules::sceneMan().setCurrentView( params.viewID[ i ] );
 		Frustum &f = Modules::sceneMan().getRenderViews()[ params.viewID[ i ] ].frustum;
-		drawRenderables( _curLight->_shadowContext, 0, false, &f, 0x0, RenderingOrder::None );
-	}
-
-	// Map from post-projective space [-1,1] to texture space [0,1]
-	for ( uint32 i = 0; i < numMaps; ++i )
-	{
-		_lightMats[ i ].scale( 0.5f, 0.5f, 1.0f );
-		_lightMats[ i ].translate( 0.5f, 0.5f, 0.0f );
+		drawRenderables( _curLight->_shadowContext, 0, false, &f, 0x0, RenderingOrder::None, true );
 	}
 
 	// ********************************************************************************************
 
 	_renderDevice->setCullMode( RS_CULL_BACK );
 	_renderDevice->setScissorTest( false );
+
+	// restore to personal texture
+	_renderDevice->setRenderBufferTex(_shadowRB, shadowMapTex);
+
+	_renderDevice->setViewport( prevVPX, prevVPY, prevVPWidth, prevVPHeight );
+	_renderDevice->setRenderBuffer( prevRendBuf );
+	_renderDevice->setColorWriteMask( true );
+
+	_curLight->_needShadowUpdate = false;
+}
+
+void Renderer::updateShadowMapDynamic()
+{
+	uint32 prevRendBuf = _renderDevice->_curRendBuf;
+	int prevVPX = _renderDevice->_vpX, prevVPY = _renderDevice->_vpY, prevVPWidth = _renderDevice->_vpWidth, prevVPHeight = _renderDevice->_vpHeight;
+
+	int shadowRTWidth, shadowRTHeight;
+	_renderDevice->getRenderBufferDimensions( _shadowRB, &shadowRTWidth, &shadowRTHeight );
+	_renderDevice->setViewport( 0, 0, shadowRTWidth, shadowRTHeight );
+
+	_renderDevice->setRenderBuffer( _shadowRB );
+
+	_renderDevice->setColorWriteMask( false );
+	_renderDevice->setDepthMask( true );
+	_renderDevice->clear( CLR_DEPTH, 0x0, 1.f );
+
+
+
+	// copy static buffer to dyn buffer as the base
+	setupViewMatrices( _curCamera->getViewMat(), Matrix4f::OrthoMat( 0, 1, 0, 1, -1, 1 ) );
+	if (_shadowBakeMat == 0x0)
+		_shadowBakeMat = (MaterialResource*) Modules::resMan().findResource(ResourceTypes::Material,"pipelines/shadowBake.material.xml");
+	if( !setMaterial( _shadowBakeMat, "FINALPASS" ) ) {
+		printf("failed to set bake material\n");
+		goto retoreState;
+	}
+	{
+		uint32 sampState = SS_FILTER_BILINEAR | SS_ANISO1 | SS_ADDR_CLAMPCOL | SS_COMP_LEQUAL;
+		_renderDevice->setTexture( 0, _curLight->_staticTexture, sampState, TextureUsage::Texture );
+
+		_renderDevice->setGeometry( _FSPolyGeo );
+		_renderDevice->draw( PRIM_TRILIST, 0, 3 );
+	}
+
+	// draw dynamic part on top
+	// Split viewing frustum into slices and render shadow maps
+
+retoreState:
+	const uint32 numMaps = _curLight->_shadowMapCount;
+	ShadowParameters &params = _shadowParams[ _curLight->_shadowRenderParamsID ];
+	// Map from post-projective space [-1,1] to texture space [0,1]
+	for ( uint32 i = 0; i < numMaps; ++i )
+	{
+		_lightMats[ i ] = _curLight->_lightProjMatrix[i] * _curLight->getViewMat();
+
+		_lightMats[ i ] = _curLight->_lightProjMatrix[i] * _curLight->getViewMat();
+		setupViewMatrices( _curLight->getViewMat(), _curLight->_lightProjMatrix[i] );
+
+		// Render
+		Modules::sceneMan().setCurrentView( params.viewID[ i ] );
+		Frustum &f = Modules::sceneMan().getRenderViews()[ params.viewID[ i ] ].frustum;
+		drawRenderables( _curLight->_shadowContext, 0, false, &f, 0x0, RenderingOrder::None, false );
+
+		_lightMats[ i ].scale(0.5f, 0.5f, 1.0f);
+		_lightMats[ i ].translate( 0.5f, 0.5f, 0.0f );
+	}
 
 	_renderDevice->setViewport( prevVPX, prevVPY, prevVPWidth, prevVPHeight );
 	_renderDevice->setRenderBuffer( prevRendBuf );
@@ -1427,15 +1492,14 @@ void Renderer::drawGeometry( const string &shaderContext, int theClass,
 //	Modules::sceneMan().sortViewObjects( order );
 	
 	setupViewMatrices( _curCamera->getViewMat(), _curCamera->getProjMat() );
-	drawRenderables( shaderContext, theClass, false, &_curCamera->getFrustum(), 0x0, order );
+	drawRenderables( shaderContext, theClass, false, &_curCamera->getFrustum(), 0x0, order, true );
+	drawRenderables( shaderContext, theClass, false, &_curCamera->getFrustum(), 0x0, order, false );
 }
 
 
 void Renderer::drawLightGeometry( const string &shaderContext, int theClass,
 								  bool noShadows, RenderingOrder::List order )
 {
-// 	Modules::sceneMan().updateQueues( _curCamera->getFrustum(), 0x0, RenderingOrder::None,
-// 	                                  SceneNodeFlags::NoDraw, true, false );
 	
 	GPUTimer *timer = Modules::stats().getGPUTimer( EngineStats::FwdLightsGPUTime );
 	if( Modules::config().gatherTimeStats ) timer->beginQuery( _frameID );
@@ -1451,7 +1515,11 @@ void Renderer::drawLightGeometry( const string &shaderContext, int theClass,
 			GPUTimer *timerShadows = Modules::stats().getGPUTimer( EngineStats::ShadowsGPUTime );
 			if( Modules::config().gatherTimeStats ) timerShadows->beginQuery( _frameID );
 
-			updateShadowMap();
+			if (_curLight->_needShadowUpdate)
+				updateShadowMapStatic();
+
+			updateShadowMapDynamic();
+
 			setupShadowMap( false );
 
 			timerShadows->endQuery();
@@ -1477,13 +1545,13 @@ void Renderer::drawLightGeometry( const string &shaderContext, int theClass,
 		
 		// Render
 		Modules::sceneMan().setCurrentView( _curLight->_renderViewID );
-//		Modules::sceneMan().sortViewObjects( order );
-// 		Modules::sceneMan().updateQueues( _curCamera->getFrustum(), &_curLight->getFrustum(),
-// 		                                  order, SceneNodeFlags::NoDraw, false, true );
 		setupViewMatrices( _curCamera->getViewMat(), _curCamera->getProjMat() );
 		drawRenderables( shaderContext.empty() ? _curLight->_lightingContext : shaderContext,
 		                 theClass, false, &_curCamera->getFrustum(),
-						 &_curLight->getFrustum(), order );
+						 &_curLight->getFrustum(), order, true );
+		drawRenderables( shaderContext.empty() ? _curLight->_lightingContext : shaderContext,
+						 theClass, false, &_curCamera->getFrustum(),
+						 &_curLight->getFrustum(), order, false );
 		Modules().stats().incStat( EngineStats::LightPassCount, 1 );
 
 		// Reset
@@ -1514,11 +1582,11 @@ void Renderer::dispatchCompute( MaterialResource *materialRes, const std::string
 // =================================================================================================
 
 void Renderer::drawRenderables( const string &shaderContext, int theClass, bool debugView,
-								const Frustum *frust1, const Frustum *frust2, RenderingOrder::List order )
+								const Frustum *frust1, const Frustum *frust2, RenderingOrder::List order, bool staticObjs)
 {
 	ASSERT( _curCamera != 0x0 );
 	
-	const RenderQueue &renderQueue = Modules::sceneMan().getRenderQueue();
+	const RenderQueue &renderQueue = Modules::sceneMan().getRenderQueue(staticObjs);
 	uint32 queueSize = (uint32)renderQueue.size();
 	if( queueSize == 0 ) return;
 
@@ -1546,7 +1614,7 @@ void Renderer::drawRenderables( const string &shaderContext, int theClass, bool 
 			if( _renderFuncRegistry[i].nodeType == renderQueue[firstItem].type )
 			{
 				_renderFuncRegistry[i].renderFunc(
-					firstItem, lastItem, shaderContext, theClass, debugView, frust1, frust2, order );
+					firstItem, lastItem, shaderContext, theClass, debugView, frust1, frust2, order, staticObjs );
 				break;
 			}
 		}
@@ -1563,13 +1631,13 @@ void Renderer::drawRenderables( const string &shaderContext, int theClass, bool 
 
 
 void Renderer::drawMeshes( uint32 firstItem, uint32 lastItem, const std::string &shaderContext, int theClass,
-						   bool debugView, const Frustum *frust1, const Frustum *frust2, RenderingOrder::List order)
+						   bool debugView, const Frustum *frust1, const Frustum *frust2, RenderingOrder::List order, bool staticObjs)
 {
 	if( frust1 == 0x0 ) return;
 	
 	RenderDeviceInterface *rdi = Modules::renderer().getRenderDevice();
 
-	const RenderQueue &renderQueue = Modules::sceneMan().getRenderQueue();
+	const RenderQueue &renderQueue = Modules::sceneMan().getRenderQueue(staticObjs);
 	GeometryResource *curGeoRes = 0x0;
 	MaterialResource *curMatRes = 0x0;
 
@@ -1686,14 +1754,14 @@ void Renderer::drawMeshes( uint32 firstItem, uint32 lastItem, const std::string 
 
 
 void Renderer::drawParticles( uint32 firstItem, uint32 lastItem, const std::string &shaderContext, int theClass,
-							  bool debugView, const Frustum *frust1, const Frustum *frust2, RenderingOrder::List order)
+							  bool debugView, const Frustum *frust1, const Frustum *frust2, RenderingOrder::List order, bool staticObjs)
 {
 	if( frust1 == 0x0 || Modules::renderer().getCurCamera() == 0x0 ) return;
 	if( debugView ) return;  // Don't render particles in debug view
 
 	RenderDeviceInterface *rdi = Modules::renderer().getRenderDevice();
 
-	const RenderQueue &renderQueue = Modules::sceneMan().getRenderQueue();
+	const RenderQueue &renderQueue = Modules::sceneMan().getRenderQueue(staticObjs);
 	MaterialResource *curMatRes = 0x0;
 
 	GPUTimer *timer = Modules::stats().getGPUTimer( EngineStats::ParticleGPUTime );
@@ -1800,14 +1868,14 @@ void Renderer::drawParticles( uint32 firstItem, uint32 lastItem, const std::stri
 
 
 void Renderer::drawComputeResults( uint32 firstItem, uint32 lastItem, const std::string &shaderContext, int theClass,
-								   bool debugView, const Frustum *frust1, const Frustum *frust2, RenderingOrder::List order )
+								   bool debugView, const Frustum *frust1, const Frustum *frust2, RenderingOrder::List order, bool staticObjs )
 {
 	if ( frust1 == 0x0 ) return;
 
 	RenderDeviceInterface *rdi = Modules::renderer().getRenderDevice();
 	if ( !rdi->getCaps().computeShaders ) return; 
 
-	const RenderQueue &renderQueue = Modules::sceneMan().getRenderQueue();
+	const RenderQueue &renderQueue = Modules::sceneMan().getRenderQueue(staticObjs);
 
 	MaterialResource *curMatRes = 0;
 	ShaderCombination *curShader = 0;
@@ -2041,7 +2109,7 @@ void Renderer::finalizeFrame()
 	timer->reset();
 }
 
-
+// tmp stuff : drawRenderables : taking static objects render queue by default here
 void Renderer::renderDebugView()
 {
 	float color[4] = { 0 };
@@ -2061,7 +2129,7 @@ void Renderer::renderDebugView()
 
 	// Draw renderable nodes as wireframe
 	setupViewMatrices( _curCamera->getViewMat(), _curCamera->getProjMat() );
-	drawRenderables( "", 0, true, &_curCamera->getFrustum(), 0x0, RenderingOrder::None );
+	drawRenderables( "", 0, true, &_curCamera->getFrustum(), 0x0, RenderingOrder::None, true );
 
 	// Draw bounding boxes
 	_renderDevice->setCullMode( RS_CULL_NONE );
@@ -2073,9 +2141,9 @@ void Renderer::renderDebugView()
 	_renderDevice->setShaderConst( _defColorShader.uniLocs[ _uni.worldMat ], CONST_FLOAT44, &identity.x[0] );
 	color[0] = 0.4f; color[1] = 0.4f; color[2] = 0.4f; color[3] = 1;
 	_renderDevice->setShaderConst( Modules::renderer()._defColShader_color, CONST_FLOAT4, color );
-	for( uint32 i = 0, s = (uint32)Modules::sceneMan().getRenderQueue().size(); i < s; ++i )
+	for( uint32 i = 0, s = (uint32)Modules::sceneMan().getRenderQueue(true).size(); i < s; ++i )
 	{
-		SceneNode *sn = Modules::sceneMan().getRenderQueue()[i].node;
+		SceneNode *sn = Modules::sceneMan().getRenderQueue(true)[i].node;
 		
 		drawAABB( sn->_bBox.min, sn->_bBox.max );
 	}

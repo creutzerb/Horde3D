@@ -330,6 +330,7 @@ void RenderDeviceGL4::initRDIFuncs()
 	_delegate_createRenderBuffer.bind< RenderDeviceGL4, &RenderDeviceGL4::createRenderBuffer >( this );
 	_delegate_destroyRenderBuffer.bind< RenderDeviceGL4, &RenderDeviceGL4::destroyRenderBuffer >( this );
 	_delegate_getRenderBufferTex.bind< RenderDeviceGL4, &RenderDeviceGL4::getRenderBufferTex >( this );
+	_delegate_setRenderBufferTex.bind< RenderDeviceGL4, &RenderDeviceGL4::setRenderBufferTex >( this );
 	_delegate_setRenderBuffer.bind< RenderDeviceGL4, &RenderDeviceGL4::setRenderBuffer >( this );
 	_delegate_getRenderBufferData.bind< RenderDeviceGL4, &RenderDeviceGL4::getRenderBufferData >( this );
 	_delegate_getRenderBufferDimensions.bind< RenderDeviceGL4, &RenderDeviceGL4::getRenderBufferDimensions >( this );
@@ -1690,6 +1691,19 @@ uint32 RenderDeviceGL4::getRenderBufferTex( uint32 rbObj, uint32 bufIndex )
 	if( bufIndex < RDIRenderBufferGL4::MaxColorAttachmentCount ) return rb.colTexs[bufIndex];
 	else if( bufIndex == 32 ) return rb.depthTex;
 	else return 0;
+}
+
+void RenderDeviceGL4::setRenderBufferTex(uint32 rbObj, uint32 texObj)
+{
+	RDIRenderBufferGL4 &rb = _rendBufs.getRef( rbObj );
+
+	glBindFramebuffer( GL_FRAMEBUFFER, rb.fbo );
+	ASSERT( texObj != 0 );
+	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_NONE );
+	rb.depthTex = texObj;
+	RDITextureGL4 &tex = _textures.getRef( texObj );
+	// Attach the texture
+	glFramebufferTexture2D( GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, tex.glObj, 0 );
 }
 
 

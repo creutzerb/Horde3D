@@ -540,6 +540,7 @@ protected:
 	RDIDelegate< uint32 ( uint32, uint32, TextureFormats::List, bool, uint32, uint32, uint32 ) > _delegate_createRenderBuffer;
 	RDIDelegate< void ( uint32 & ) >									_delegate_destroyRenderBuffer;
 	RDIDelegate< uint32( uint32, uint32 ) >								_delegate_getRenderBufferTex;
+	RDIDelegate< void ( uint32, uint32 ) >								_delegate_setRenderBufferTex;
 	RDIDelegate< void ( uint32 ) >										_delegate_setRenderBuffer;
 	RDIDelegate< bool ( uint32, int, int *, int *, int *, void *, int ) > _delegate_getRenderBufferData;
 	RDIDelegate< void ( uint32, int *, int * ) >						_delegate_getRenderBufferDimensions;
@@ -824,6 +825,10 @@ public:
 	uint32 getRenderBufferTex( uint32 rbObj, uint32 bufIndex ) 
 	{
 		return _delegate_getRenderBufferTex.invoke( rbObj, bufIndex );
+	}
+	void setRenderBufferTex( uint32 rbObj, uint32 texObj )
+	{
+		_delegate_setRenderBufferTex.invoke( rbObj, texObj );
 	}
 	void setRenderBuffer( uint32 rbObj ) 
 	{ 

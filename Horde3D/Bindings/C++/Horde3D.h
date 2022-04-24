@@ -704,7 +704,8 @@ struct H3DLight
 		ShadowSplitLambdaF,
 		ShadowMapBiasF,
 		LightingContextStr,
-		ShadowContextStr
+                ShadowContextStr,
+                UpdateShadowI
 	};
 };
 

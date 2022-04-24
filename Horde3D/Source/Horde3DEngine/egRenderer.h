@@ -42,7 +42,7 @@ extern const char *fsOccBox;
 
 typedef void (*RenderFunc)( uint32 firstItem, uint32 lastItem, const std::string &shaderContext,
                             int theClass, bool debugView, const Frustum *frust1,
-							const Frustum *frust2, RenderingOrder::List order);
+							const Frustum *frust2, RenderingOrder::List order, bool staticObjs);
 
 struct RenderFuncListItem
 {
@@ -171,12 +171,12 @@ public:
 	void drawSphere( const Vec3f &pos, float radius );
 	void drawCone( float height, float fov, const Matrix4f &transMat );
 
-	static void drawMeshes( uint32 firstItem, uint32 lastItem, const std::string &shaderContext, int theClass,
-		bool debugView, const Frustum *frust1, const Frustum *frust2, RenderingOrder::List order );
+	static void drawMeshes(uint32 firstItem, uint32 lastItem, const std::string &shaderContext, int theClass,
+		bool debugView, const Frustum *frust1, const Frustum *frust2, RenderingOrder::List order , bool staticObjs);
 	static void drawParticles( uint32 firstItem, uint32 lastItem, const std::string &shaderContext, int theClass,
-		bool debugView, const Frustum *frust1, const Frustum *frust2, RenderingOrder::List order );
-	static void drawComputeResults( uint32 firstItem, uint32 lastItem, const std::string &shaderContext, int theClass, 
-									bool debugView, const Frustum *frust1, const Frustum *frust2, RenderingOrder::List order );
+		bool debugView, const Frustum *frust1, const Frustum *frust2, RenderingOrder::List order, bool staticObjs);
+	static void drawComputeResults(uint32 firstItem, uint32 lastItem, const std::string &shaderContext, int theClass,
+									bool debugView, const Frustum *frust1, const Frustum *frust2, RenderingOrder::List order , bool staticObjs);
 
 	void render( CameraNode *camNode );
 	void finalizeFrame();
@@ -206,13 +206,12 @@ protected:
 	// Shadows
 	void setupShadowMap( bool noShadows );
 
-	Matrix4f calcCropMatrixOld( const Frustum &frustSlice, const Vec3f lightPos, const Matrix4f &lightViewProjMat );
 	Matrix4f calcCropMatrix( int renderView, const LightNode *light, const Matrix4f &lightViewProjMat );
 	
-	int prepareCropFrustum( const LightNode *light, const BoundingBox &viewBB );
-	bool prepareShadowMapFrustum( const LightNode *light, int shadowView );
-	void updateShadowMap();
-	void updateShadowMapOld();
+	int prepareCropFrustum( LightNode *light, const BoundingBox &viewBB );
+	bool prepareShadowMapFrustum(LightNode *light, int shadowView );
+	void updateShadowMapStatic();
+	void updateShadowMapDynamic();
 
 	// Drawing functions
 	void bindPipeBuffer( uint32 rbObj, const std::string &sampler, uint32 bufIndex );
@@ -223,8 +222,8 @@ protected:
 	void drawLightGeometry( const std::string &shaderContext, int theClass,
 							bool noShadows, RenderingOrder::List order );
 	
-	void drawRenderables( const std::string &shaderContext, int theClass, bool debugView,
-		const Frustum *frust1, const Frustum *frust2, RenderingOrder::List order );
+	void drawRenderables(const std::string &shaderContext, int theClass, bool debugView,
+		const Frustum *frust1, const Frustum *frust2, RenderingOrder::List order , bool staticObjs);
 	
 	void renderDebugView();
 	void finishRendering();
@@ -262,6 +261,8 @@ protected:
 	uint32                             _defShadowMap;
 	uint32                             _quadIdxBuf;
 	uint32                             _particleVBO;
+
+	MaterialResource				   *_shadowBakeMat = 0x0;
 
 	MaterialResource                   *_curStageMatLink;
 	CameraNode                         *_curCamera;

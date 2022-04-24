@@ -271,12 +271,14 @@ SceneNode *GroupNode::factoryFunc( const SceneNodeTpl &nodeTpl )
 RenderView::RenderView( RenderViewType viewType, SceneNode *viewNode, const Frustum &f, int link, uint32 additionalFilter ) : 
 						type( viewType ), node( viewNode ), frustum( f ), updated( false ), linkedView( link ), auxFilter( additionalFilter )
 {
-	objects.reserve( H3D_RESERVED_VIEW_OBJECTS );
+	objects_static.reserve( H3D_RESERVED_VIEW_OBJECTS );
+	objects_dynami.reserve( H3D_RESERVED_VIEW_OBJECTS );
 }
 
 RenderView::RenderView() : node( nullptr ), type( RenderViewType::Unknown ), updated( false ), linkedView( -1 ), auxFilter( 0 )
 {
-	objects.reserve( H3D_RESERVED_VIEW_OBJECTS );
+	objects_static.reserve( H3D_RESERVED_VIEW_OBJECTS );
+	objects_dynami.reserve( H3D_RESERVED_VIEW_OBJECTS );
 }
 
 // =================================================================================================
@@ -457,22 +459,26 @@ void SpatialGraph::updateQueues( uint32 filterIgnore, bool forceUpdateAllViews /
 	//		goal is to reduce state changes in drawMeshes function
 	//		also : can cull by not using indices instead of the flags
 
+	CameraNode *cam = ( CameraNode * ) _views[ 0 ].node;
+
 	// Culling
 //	for ( size_t i = 0, s = _nodes.size(); i < s; ++i )
 	for ( size_t i = 0; i < _customQueue.size(); i++ )
 	{
 //		SceneNode *node = _nodes[ i ];
-		SceneNode *node = _nodes[ _customQueue [i] ];
+		bool isStatic = (_customQueue [i] >= 0);
+		SceneNode *node = (isStatic)? _nodes[ _customQueue [i] ] : _nodes[ -_customQueue [i] ];
 		if ( node == 0x0 || ( node->_flags & filterIgnore ) || !node->_renderable ) continue;
 
 //		printf("node name %s\n", node->_name.c_str());
 
-		for ( size_t view = 0; view < _totalViews; ++view )
+		for ( int view = 0; view < _totalViews; ++view )
 		{
 			v = &_views[ view ];
 
 			// Skip views that are already updated
-			if ( !v->updated && !v->frustum.cullBox( node->_bBox ) )
+//			if ( !v->updated && !v->frustum.cullBox( node->_bBox ) )
+			if ( !v->updated && !cam->getFrustum().cullBox( node->_bBox ) )// use cam frustum for directional light
 			{
 				if ( v != cameraView ) 
 				{
@@ -485,13 +491,18 @@ void SpatialGraph::updateQueues( uint32 filterIgnore, bool forceUpdateAllViews /
 				if ( v->auxFilter && !( node->_flags & v->auxFilter ) ) v->auxObjectsAABB.makeUnion( node->_bBox );
 
 				// sortKey will be computed in the sorting function basing on requested sorting algorithm
-				v->objects.emplace_back( RenderQueueItem( node->_type, 0, node ) );
+				if (isStatic){
+					v->objects_static.emplace_back( RenderQueueItem( node->_type, 0, node ) );
+				}else{
+					v->objects_dynami.emplace_back( RenderQueueItem( node->_type, 0, node ) );
+				}
+
 			}
 		}
 	}
 
 	// Post culling actions
-	for ( size_t i = 0; i < _totalViews; ++i )
+	for ( int i = 0; i < _totalViews; ++i )
 	{
 		if ( _views[ i ].type == RenderViewType::Light ) _lightQueue.emplace_back( _views[ i ].node ); // Update light queue
 		_views[ i ].updated = true; 	// Mark all current views as updated
@@ -507,7 +518,8 @@ void SpatialGraph::clearViews()
 		RenderView &view = _views[ i ];
 		view.node = nullptr;
 		view.frustum = Frustum();
-		view.objects.resize( 0 );
+		view.objects_static.resize( 0 );
+		view.objects_dynami.resize( 0 );
 		view.objectsAABB.clear();
 		view.auxObjectsAABB.clear();
 		view.auxFilter = 0;
@@ -554,9 +566,9 @@ void SpatialGraph::sortViewObjects( int viewID, RenderingOrder::List order )
 	float sortKey;
 	RenderView *view = &_views[ viewID ];
 
-	for ( size_t i = 0; i < view->objects.size(); ++i )
+	for ( size_t i = 0; i < view->objects_static.size(); ++i )
 	{
-		SceneNode *node = view->objects[ i ].node;
+		SceneNode *node = view->objects_static[ i ].node;
 		switch ( order )
 		{
 			case RenderingOrder::StateChanges:
@@ -573,12 +585,12 @@ void SpatialGraph::sortViewObjects( int viewID, RenderingOrder::List order )
 				break;
 		}
 
-		view->objects[ i ].sortKey = sortKey;
+		view->objects_static[ i ].sortKey = sortKey;
 	}
 
 	// Sort
 	if ( order != RenderingOrder::None )
-		std::sort( view->objects.begin(), view->objects.end(), RenderQueueItemCompFunc() );
+		std::sort( view->objects_static.begin(), view->objects_static.end(), RenderQueueItemCompFunc() );
 }
 
 
@@ -588,9 +600,14 @@ void SpatialGraph::sortViewObjects( RenderingOrder::List order )
 }
 
 
-RenderQueue & SpatialGraph::getRenderQueue()
+RenderQueue & SpatialGraph::getRenderQueue(bool staticObjs)
 {
-	if ( _currentView != -1 ) return _views[ _currentView ].objects;
+	if ( _currentView != -1 ) {
+		if (staticObjs)
+			return _views[ _currentView ].objects_static;
+		else
+			return _views[ _currentView ].objects_dynami;
+	}
 	else return _renderQueue;
 }
 

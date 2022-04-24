@@ -37,7 +37,8 @@ struct LightNodeParams
 		ShadowSplitLambdaF,
 		ShadowMapBiasF,
 		LightingContextStr,
-		ShadowContextStr
+		ShadowContextStr,
+		UpdateShadowI
 	};
 };
 
@@ -104,6 +105,11 @@ private:
 
 	int					   _shadowRenderParamsID; // id for shadow parameters (frustums, matrices) queue in renderer
 	int					   _renderViewID; 
+
+	// static render stuff
+	bool				   _needShadowUpdate = true;
+	uint32				   _staticTexture = 0;
+	Matrix4f			   _lightProjMatrix[ 4 ];
 
 	friend class SceneManager;
 	friend class Renderer;

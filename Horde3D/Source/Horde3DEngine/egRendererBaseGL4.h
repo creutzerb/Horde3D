@@ -264,6 +264,7 @@ public:
 	                           bool depth, uint32 numColBufs, uint32 samples, uint32 maxMipLevel );
 	void destroyRenderBuffer(uint32 &rbObj );
 	uint32 getRenderBufferTex( uint32 rbObj, uint32 bufIndex );
+	void setRenderBufferTex( uint32 rbObj, uint32 texObj );
 	void setRenderBuffer( uint32 rbObj );
 	bool getRenderBufferData( uint32 rbObj, int bufIndex, int *width, int *height,
 	                          int *compCount, void *dataBuffer, int bufferSize );

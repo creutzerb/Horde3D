@@ -137,6 +137,9 @@ void LightNode::setParamI( int param, int value )
 		else
 			Modules::setError( "Invalid value in h3dSetNodeParamI for H3DLight::ShadowMapCountI" );
 		return;
+	case LightNodeParams::UpdateShadowI:
+		_needShadowUpdate = true;
+		return;
 	}
 
 	return SceneNode::setParamI( param, value );
